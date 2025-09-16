@@ -6,3 +6,6 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ApiUserController;
 
 Route::apiResource('user', ApiUserController::class)->middleware('auth:sanctum');
+
+// Calendar API routes
+require __DIR__.'/api_calendar.php';

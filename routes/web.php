@@ -5,12 +5,16 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\WelcomeController;
+use Illuminate\Support\Facades\Route as WebRoute;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\User\OauthController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\User\LoginLinkController;
 
-Route::get('/', [WelcomeController::class, 'home'])->name('home');
+// Redirect root to the calendar page so it opens by default
+Route::get('/', function () {
+    return redirect()->route('calendar.index');
+})->name('home');
 
 Route::prefix('auth')->group(
     function () {
@@ -38,3 +42,6 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
         ->names('subscriptions')
         ->only(['index', 'create', 'store', 'show']);
 });
+
+// Add calendar routes
+require __DIR__.'/calendar.php';

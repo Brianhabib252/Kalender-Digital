@@ -16,10 +16,17 @@ final class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::factory()->withPersonalTeam()->create([
+        // Base user
+        $user = User::factory()->withPersonalTeam()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => Hash::make('password'),
+        ]);
+
+        // Divisions and calendar dummy events
+        $this->call([
+            DivisionSeeder::class,
+            EventSeeder::class,
         ]);
     }
 }
