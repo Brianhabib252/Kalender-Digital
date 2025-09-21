@@ -74,9 +74,14 @@ Open the calendar at: `http://127.0.0.1:8000/calendar`
 
 ## Screenshots
 
-| Dashboard (Light) | Dashboard (Dark) |
-| --- | --- |
-| ![Dashboard Light](public/images/dashboard-light.webp) | ![Dashboard Dark](public/images/dashboard-dark.webp) |
+These should reflect the current digital calendar UI. Add your captures to `public/images/` and adjust paths if needed.
+
+- Calendar (Month): `public/images/calendar-month.png`
+  - ![Calendar Month](public/images/calendar-month.png)
+- Calendar (Day Timeline): `public/images/calendar-day.png`
+  - ![Calendar Day](public/images/calendar-day.png)
+- Admin – Perubahan Pengguna & Perubahan Kalender: `public/images/admin-users.png`
+  - ![Admin Users](public/images/admin-users.png)
 
 > Tip: You can add your own animated GIF demo by placing a file at `public/images/getting-started.gif` and linking it here.
 
@@ -145,3 +150,4 @@ At the time of writing: 110 passed, 3 skipped (286 assertions).
 ## License
 
 MIT
+
