@@ -1,4 +1,4 @@
-# Kalender Digital
+ï»¿# Kalender Digital
 
 A modern, role-based digital calendar for teams powered by Laravel 12, Inertia (Vue 3), and TailwindCSS. It includes authentication, division-based filtering, recurring events, and admin tools for managing users and auditing changes.
 
@@ -72,17 +72,25 @@ npm run dev # or: bun run dev
 
 Open the calendar at: `http://127.0.0.1:8000/calendar`
 
+## Screenshots
+
+| Dashboard (Light) | Dashboard (Dark) |
+| --- | --- |
+| ![Dashboard Light](public/images/dashboard-light.webp) | ![Dashboard Dark](public/images/dashboard-dark.webp) |
+
+> Tip: You can add your own animated GIF demo by placing a file at `public/images/getting-started.gif` and linking it here.
+
 ## Features
 
 - Calendar views
   - Month view with division chips and quick create
-  - Day timeline (06:00–18:00) with overlap layout
+  - Day timeline (06:00â€“18:00) with overlap layout
   - Division filter and text search (title/location/description)
 - Events
   - Create/Update/Delete with title, description, location
   - Divisions and participants (IDs; can be extended to autocomplete)
   - Recurrence: weekly (days + interval) and monthly (date + interval)
-  - "Sepanjang hari" sets activity to 07:30–16:00 (workday hours)
+  - "Sepanjang hari" sets activity to 07:30â€“16:00 (workday hours)
 - Roles
   - Viewer: read-only
   - Editor: can create and manage events they created
@@ -97,7 +105,7 @@ Open the calendar at: `http://127.0.0.1:8000/calendar`
 - Login (Jetstream) and go to `/calendar`.
 - Use "Pilih tanggal", navigation buttons, or chips to filter by division.
 - Click "+ Buat" on a day or in the day timeline to add an activity.
-- Admins can open profile pop-out ? "Manajemen Pengguna", or go to `/admin/users` directly.
+- Admins can open profile pop-out â†’ "Manajemen Pengguna", or go to `/admin/users` directly.
   - Change roles (viewer/editor/admin) and update user info, then "Simpan".
   - Use the date pickers at the top of each logs section to review changes for a specific day.
 
@@ -131,7 +139,7 @@ At the time of writing: 110 passed, 3 skipped (286 assertions).
 ## Troubleshooting
 
 - Division filter does not apply: ensure you are on the latest main; the calendar re-fetches when division chips change.
-- "Sepanjang hari" spans full day: fixed to use 07:30–16:00; edit and re-save existing events if needed.
+- "Sepanjang hari" spans full day: fixed to use 07:30â€“16:00; edit and re-save existing events if needed.
 - Logs not recording: run migrations for `user_change_logs` and `event_change_logs`.
 
 ## License
