@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\Event;
 use App\Models\User;
+use App\Policies\EventPolicy;
 use Prism\Prism\Prism;
 use Carbon\CarbonImmutable;
 use Knuckles\Scribe\Scribe;
@@ -13,6 +15,7 @@ use Laravel\Sanctum\Sanctum;
 use Prism\Prism\Enums\Provider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Vite;
@@ -59,6 +62,7 @@ final class AppServiceProvider extends ServiceProvider
         $this->configurePrisms();
         $this->configureScribeDocumentation();
         $this->configureRateLimiting();
+        $this->configureAuthorization();
     }
 
     /**
@@ -168,5 +172,10 @@ final class AppServiceProvider extends ServiceProvider
     private function configureRateLimiting(): void
     {
         RateLimiter::for('login-link', fn (Request $request) => $request->email ? Limit::perHour(5)->by($request->email) : Limit::perHour(5)->by($request->ip()));
+    }
+
+    private function configureAuthorization(): void
+    {
+        Gate::policy(Event::class, EventPolicy::class);
     }
 }

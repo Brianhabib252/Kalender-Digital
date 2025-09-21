@@ -60,6 +60,8 @@ test('admin can create new user', function (): void {
     $userData = [
         'name' => 'Test User',
         'email' => 'test@example.com',
+        'nip' => '198765432109876543',
+        'phone' => '08111111111',
         'password' => 'password123',
         'password_confirmation' => 'password123',
     ];
@@ -70,6 +72,8 @@ test('admin can create new user', function (): void {
         ->assertJson(
             fn (AssertableJson $json): AssertableJson => $json->where('name', $userData['name'])
                 ->where('email', $userData['email'])
+                ->where('nip', $userData['nip'])
+                ->where('phone', $userData['phone'])
                 ->etc()
         );
 });
@@ -94,6 +98,8 @@ test('admin can update user', function (): void {
     $updateData = [
         'name' => 'Updated Name',
         'email' => 'updated@example.com',
+        'nip' => '198765432109876546',
+        'phone' => '08122222222',
     ];
 
     $response = $this->putJson("/api/user/{$this->writer->id}", $updateData);
@@ -102,6 +108,8 @@ test('admin can update user', function (): void {
         ->assertJson(
             fn (AssertableJson $json): AssertableJson => $json->where('name', $updateData['name'])
                 ->where('email', $updateData['email'])
+                ->where('nip', $updateData['nip'])
+                ->where('phone', $updateData['phone'])
                 ->etc()
         );
 });
@@ -146,6 +154,8 @@ test('token abilities are properly checked', function (): void {
     $response = $this->postJson('/api/user', [
         'name' => 'Test User',
         'email' => 'test@example.com',
+        'nip' => '198765432109876544',
+        'phone' => '08133333333',
         'password' => 'password123',
         'password_confirmation' => 'password123',
     ]);
@@ -156,6 +166,8 @@ test('token abilities are properly checked', function (): void {
     $response = $this->postJson('/api/user', [
         'name' => 'Test User',
         'email' => 'test@example.com',
+        'nip' => '198765432109876545',
+        'phone' => '08144444444',
         'password' => 'password123',
         'password_confirmation' => 'password123',
     ]);

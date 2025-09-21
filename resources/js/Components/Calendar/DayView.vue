@@ -7,6 +7,8 @@ const props = defineProps({
   events: { type: Array, default: () => [] },
   startHour: { type: Number, default: 0 },
   endHour: { type: Number, default: 23 },
+  canCreate: { type: Boolean, default: true },
+  canEdit: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['open-create','open-edit'])
@@ -109,6 +111,15 @@ const laidOut = computed(() => {
 })
 
 const hours = computed(() => Array.from({ length: rangeHours.value }, (_,i) => i + props.startHour))
+
+function handleOpenCreate(date) {
+  if (!props.canCreate) return
+  emit('open-create', date)
+}
+
+function handleOpenEdit(event) {
+  emit('open-edit', event)
+}
 </script>
 
 <template>
@@ -121,14 +132,23 @@ const hours = computed(() => Array.from({ length: rangeHours.value }, (_,i) => i
       <div class="flex-1 relative border rounded-xl bg-white overflow-hidden">
         <div class="sticky top-0 z-10 bg-emerald-50/60 border-b px-4 py-3 flex items-center justify-between">
           <div class="text-base md:text-lg font-bold text-emerald-700">{{ date }}</div>
-          <button class="h-10 px-4 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition" @click="() => emit('open-create', date)">+ Buat</button>
+          <button
+            class="h-10 px-4 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="!props.canCreate"
+            @click="() => handleOpenCreate(date)"
+          >
+            + Buat
+          </button>
         </div>
         <div class="relative" :style="{ height: (hourHeight * rangeHours) + 'px' }">
           <div v-for="h in hours" :key="h" class="absolute left-0 right-0 border-t border-gray-200" :style="{ top: (hourHeight * (h - props.startHour)) + 'px' }"></div>
-          <EventBlock v-for="item in laidOut" :key="item.key"
+          <EventBlock
+            v-for="item in laidOut"
+            :key="item.key"
             :event="item.e"
             :style="item.style"
-            @click="() => emit('open-edit', item.e)"
+            :class="props.canEdit ? '' : 'opacity-60'"
+            @click="() => handleOpenEdit(item.e)"
           />
         </div>
       </div>

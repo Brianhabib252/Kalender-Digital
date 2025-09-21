@@ -75,7 +75,7 @@ return [
     |
     */
 
-    'home' => '/dashboard',
+    'home' => '/calendar',
 
     /*
     |--------------------------------------------------------------------------
@@ -149,7 +149,6 @@ return [
         Features::registration(),
         Features::resetPasswords(),
         Features::hasSecurityFeatures(),
-        Features::emailVerification(),
         Features::updateProfileInformation(),
         Features::updatePasswords(),
         Features::twoFactorAuthentication([

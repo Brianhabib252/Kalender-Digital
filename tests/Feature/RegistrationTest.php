@@ -15,11 +15,13 @@ test('new users can register', function (): void {
     $response = $this->post('/register', [
         'name' => fake()->name(),
         'email' => fake()->unique()->safeEmail(),
+        'nip' => fake()->unique()->numerify('1987654321######'),
+        'phone' => fake()->unique()->numerify('08##########'),
         'password' => 'password',
         'password_confirmation' => 'password',
         'terms' => Jetstream::hasTermsAndPrivacyPolicyFeature(),
     ]);
 
     $this->assertAuthenticated();
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect(route('calendar.index', absolute: false));
 });

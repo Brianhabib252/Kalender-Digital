@@ -14,6 +14,7 @@ class DivisionSeeder extends Seeder
             'Hakim',
             'Kesekretariatan',
             'Kepaniteraan',
+            'Dinas Luar',
         ];
 
         foreach ($names as $name) {
@@ -21,4 +22,3 @@ class DivisionSeeder extends Seeder
         }
     }
 }
-

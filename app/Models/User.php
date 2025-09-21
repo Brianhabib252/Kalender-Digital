@@ -17,7 +17,6 @@ use Laravel\Sanctum\PersonalAccessToken;
 use Filament\Models\Contracts\FilamentUser;
 use Illuminate\Database\Eloquent\Collection;
 use Laravel\Fortify\TwoFactorAuthenticatable;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -30,6 +29,7 @@ use function Illuminate\Events\queueable;
  * @property int $id
  * @property string $name
  * @property string $email
+ * @property string $role
  * @property CarbonImmutable|null $email_verified_at
  * @property string $password
  * @property string|null $remember_token
@@ -90,8 +90,14 @@ use function Illuminate\Events\queueable;
  *
  * @mixin \Eloquent
  */
-final class User extends Authenticatable implements FilamentUser, MustVerifyEmail
+final class User extends Authenticatable implements FilamentUser
 {
+    public const ROLE_ADMIN = 'admin';
+    public const ROLE_EDITOR = 'editor';
+    public const ROLE_VIEWER = 'viewer';
+
+    public const ADMIN_EMAIL = 'brianhabib252@gmail.com';
+
     use Billable;
     use HasApiTokens;
 
@@ -116,6 +122,21 @@ final class User extends Authenticatable implements FilamentUser, MustVerifyEmai
         'updated_at',
 
     ];
+
+    public function isAdmin(): bool
+    {
+        return $this->role === self::ROLE_ADMIN;
+    }
+
+    public function isEditor(): bool
+    {
+        return $this->role === self::ROLE_EDITOR;
+    }
+
+    public function isViewer(): bool
+    {
+        return $this->role === self::ROLE_VIEWER;
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -180,6 +201,7 @@ final class User extends Authenticatable implements FilamentUser, MustVerifyEmai
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => 'string',
         ];
     }
 }

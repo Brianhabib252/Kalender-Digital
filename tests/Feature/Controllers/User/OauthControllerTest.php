@@ -27,7 +27,7 @@ beforeEach(function (): void {
             'name' => 'Test User',
             'email' => 'test@test.com',
             'avatar' => 'https://github.com/avatar.jpg',
-            'user' => ['id' => '123456'],
+            'user' => ['id' => '123456', 'nip' => '198765432109876548', 'phone' => '08166666666'],
             'token' => 'test-token',
             'refreshToken' => 'test-refresh-token',
             'expiresIn' => 3600,

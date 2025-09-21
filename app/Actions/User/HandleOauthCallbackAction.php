@@ -6,16 +6,17 @@ namespace App\Actions\User;
 
 use App\Models\User;
 use App\Traits\AsFakeAction;
-use InvalidArgumentException;
-use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\DB;
-use App\Actions\Fortify\CreateNewUser;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Actions\Fortify\CreateNewUser;
 use App\Exceptions\OAuthAccountLinkingException;
-use Laravel\Socialite\Two\User as SocialiteUser;
 use App\Jobs\User\UpdateUserProfileInformationJob;
+use InvalidArgumentException;
+use Laravel\Socialite\Two\User as SocialiteUser;
 
 final readonly class HandleOauthCallbackAction
 {
@@ -94,9 +95,17 @@ final readonly class HandleOauthCallbackAction
 
     private function createNewUser(SocialiteUser $socialiteUser, string $provider): User
     {
+        $generatedNip = sprintf('%018d', random_int(0, 999999999999999999));
+        $generatedPhone = sprintf('08%09d', random_int(0, 999999999));
+
+        $profile = (array) ($socialiteUser->user ?? []);
+        $raw = method_exists($socialiteUser, 'getRaw') ? (array) $socialiteUser->getRaw() : [];
+
         $user = (new CreateNewUser())->create([
             'name' => (string) $socialiteUser->getName(),
             'email' => (string) $socialiteUser->getEmail(),
+            'nip' => (string) (Arr::get($profile, 'nip') ?? Arr::get($raw, 'nip') ?? $generatedNip),
+            'phone' => (string) (Arr::get($profile, 'phone') ?? Arr::get($raw, 'phone') ?? Arr::get($raw, 'phone_number') ?? $generatedPhone),
             'terms' => (string) true,
         ]);
 

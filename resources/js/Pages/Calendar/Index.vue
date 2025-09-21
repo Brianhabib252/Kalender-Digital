@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref, computed, watchEffect } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import MonthView from '../../Components/Calendar/MonthView.vue'
@@ -6,6 +6,7 @@ import DayView from '../../Components/Calendar/DayView.vue'
 import SidebarDayList from '../../Components/Calendar/SidebarDayList.vue'
 import EventFormModal from '../../Components/Calendar/EventFormModal.vue'
 import LoadingOverlay from '../../Components/UI/LoadingOverlay.vue'
+import ProfileSettingsModal from '../../Components/Profile/ProfileSettingsModal.vue'
 
 const props = defineProps({
   today: String,
@@ -13,6 +14,33 @@ const props = defineProps({
   date: { type: String, default: null },
   divisionOptions: { type: Array, default: () => [] },
 })
+
+const page = usePage()
+const user = computed(() => page.props?.auth?.user ?? null)
+const showProfileModal = ref(false)
+
+const role = computed(() => user.value?.role ?? 'viewer')
+const canCreate = computed(() => ['admin', 'editor'].includes(role.value))
+const canEdit = computed(() => role.value !== 'viewer')
+const canDelete = computed(() => role.value === 'admin' || role.value === 'editor')
+
+let sanctumBootstrapped = false
+
+async function ensureSanctumCookie() {
+  if (sanctumBootstrapped) return
+  await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+  sanctumBootstrapped = true
+}
+
+function xsrfToken() {
+  const value = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('XSRF-TOKEN='))
+    ?.split('=')[1]
+
+  return value ? decodeURIComponent(value) : ''
+}
+
 
 const currentView = ref(props.view || 'month')
 const currentDate = ref(props.date || props.today)
@@ -127,15 +155,31 @@ const displayDate = computed(() => {
   return `${dd}/${mm}/${yy}`
 })
 
+function openProfileModal() {
+  showProfileModal.value = true
+}
+
+function closeProfileModal() {
+  showProfileModal.value = false
+}
+
 async function fetchEvents() {
   loading.value = true
   try {
+    await ensureSanctumCookie()
     const params = new URLSearchParams()
     params.set('start', range.value.start.toISOString())
     params.set('end', range.value.end.toISOString())
     if (q.value) params.set('q', q.value)
     for (const id of selectedDivisionIds.value) params.append('division', id)
-    const res = await fetch(`/api/events?${params.toString()}`)
+    const res = await fetch(`/api/events?${params.toString()}`, {
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
+      },
+    })
     const json = await res.json()
     events.value = json.data || []
   } finally {
@@ -144,11 +188,17 @@ async function fetchEvents() {
 }
 
 watchEffect(() => {
+  // Touch reactive dependencies synchronously so changes trigger this effect
+  const _view = currentView.value
+  const _date = currentDate.value
+  const _q = q.value
+  const _divKey = selectedDivisionIds.value.join(',')
+
   fetchEvents()
-  // sync URL
+  // sync URL (only view/date go to query)
   router.visit(`/calendar`, { method: 'get', data: {
-    view: currentView.value,
-    date: currentDate.value,
+    view: _view,
+    date: _date,
   }, replace: true, preserveState: true, preserveScroll: true })
 })
 
@@ -161,6 +211,7 @@ function go(delta, unit) {
 }
 
 function openCreate(slotDate, slotStartAt) {
+  if (!canCreate.value) return
   editingEvent.value = null
   selectedDay.value = slotDate || currentDate.value
   showForm.value = true
@@ -174,9 +225,19 @@ function openEdit(evt) {
 function onSaved() { showForm.value = false; fetchEvents() }
 
 async function onDelete(evt) {
+  if (!canDelete.value) return
   if (!evt?.id) return
   if (!confirm('Hapus kegiatan ini?')) return
-  const res = await fetch(`/api/events/${evt.id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } })
+  await ensureSanctumCookie()
+  const res = await fetch(`/api/events/${evt.id}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: {
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
+    },
+  })
   if (!res.ok) {
     try {
       const data = await res.json(); alert(data?.message || 'Gagal menghapus kegiatan')
@@ -188,58 +249,84 @@ async function onDelete(evt) {
 </script>
 
 <template>
-  <div class="p-4 md:p-6">
-    <div class="max-w-7xl mx-auto space-y-4">
+  <section class="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50 px-4 py-10 md:px-8">
+    <div class="mx-auto max-w-7xl space-y-6">
       <!-- Dashboard header -->
-      <div class="rounded-2xl bg-gradient-to-r from-emerald-600 to-green-600 px-5 py-6 shadow-md transition-all duration-300 hover:shadow-xl">
-        <div class="text-white space-y-3">
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex items-center gap-3">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-16 h-16 md:w-20 md:h-20">
-                <path d="M6 2a1 1 0 0 1 1 1v1h10V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm14 6H4v11h16V8zM4 6h16V5h-1v1a1 1 0 1 1-2 0V5H7v1a1 1 0 1 1-2 0V5H4v1z" />
-              </svg>
-              <div>
-                <div class="text-2xl md:text-3xl font-bold">Pengadilan Tinggi Agama Surabaya</div>
-                <div class="text-white/80 text-base">Jadwal kegiatan terpusat dan transparan</div>
+      <div class="rounded-3xl border border-emerald-100 bg-gradient-to-r from-emerald-100 via-emerald-50 to-white px-6 py-8 shadow-[0_35px_120px_-60px_rgba(16,185,129,0.45)] transition-all duration-300 hover:shadow-[0_45px_160px_-70px_rgba(16,185,129,0.5)]">
+        <div class="space-y-6 text-emerald-900">
+          <div class="grid gap-6 items-stretch xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div class="flex h-full items-start gap-5">
+              <div class="hidden sm:flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-200/70 text-emerald-700 shadow-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-10 w-10">
+                  <path d="M6 2a1 1 0 0 1 1 1v1h10V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm14 6H4v11h16V8zM4 6h16V5h-1v1a1 1 0 1 1-2 0V5H7v1a1 1 0 1 1-2 0V5H4v1z" />
+                </svg>
+              </div>
+              <div class="space-y-3">
+                <p class="text-3xl font-semibold uppercase tracking-[0.45em] text-emerald-700 md:text-4xl">Kalender Digital</p>
+                <h1 class="text-3xl font-semibold leading-tight text-emerald-900 md:text-4xl">Pengadilan Tinggi Agama Surabaya</h1>
+                <p class="max-w-2xl text-base text-emerald-700 md:text-lg">Jadwal kegiatan terpusat dan transparan demi koordinasi yang rapi di setiap divisi.</p>
               </div>
             </div>
-            <div class="flex items-center gap-3 text-sm md:text-base flex-nowrap">
-              <button class="h-11 w-48 inline-flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-900 shadow-sm hover:bg-emerald-50 hover:border-emerald-300 active:scale-95 transition" @click="currentDate = today">Hari Ini</button>
-              <input type="date" v-model="currentDate" class="h-11 w-48 px-4 rounded-xl bg-white border border-gray-200 text-gray-900 shadow-sm focus:ring-4 focus:ring-emerald-300" />
-              <input v-model="q" placeholder="Cari judul/lokasi/deskripsi" class="h-11 w-48 px-4 rounded-xl bg-white border border-gray-200 text-gray-900 shadow-sm focus:ring-4 focus:ring-emerald-300" />
-              <button class="h-11 w-48 inline-flex items-center justify-center rounded-xl bg-white border border-gray-200 text-emerald-700 shadow-sm hover:bg-emerald-50 hover:border-emerald-300 active:scale-95 transition" @click="openCreate()">Tambah Kegiatan</button>
+
+            <div v-if="user" class="flex h-full w-full max-w-xs flex-col items-center rounded-2xl border border-emerald-200 bg-white/90 px-5 py-5 text-center shadow-[0_15px_60px_-50px_rgba(16,185,129,0.6)] backdrop-blur-sm">
+              <div class="space-y-2">
+                <div class="text-xl font-semibold text-emerald-700">{{ user.name }}</div>
+              </div>
+              <button
+                type="button"
+                class="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-emerald-300/40 transition hover:from-emerald-300 hover:via-emerald-400 hover:to-teal-300"
+                @click="openProfileModal"
+              >
+                Kelola Profil
+              </button>
             </div>
           </div>
-          <div class="flex gap-4 text-white text-xl">
+
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <button class="h-11 w-full rounded-xl border border-emerald-200 bg-white text-sm font-semibold text-emerald-600 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 active:scale-95" @click="currentDate = today">
+              Hari Ini
+            </button>
+            <label class="flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-white px-4 text-sm text-emerald-700 shadow-sm focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-200">
+              <span class="hidden sm:inline whitespace-nowrap text-emerald-500/80">Pilih tanggal</span>
+              <input type="date" v-model="currentDate" class="h-8 w-full rounded-md border border-transparent bg-transparent text-right focus:border-emerald-300 focus:outline-none" />
+            </label>
+            <div class="flex h-11 w-full items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 text-sm shadow-sm focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-200">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="h-4 w-4 text-emerald-500"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" stroke-linejoin="round" d="m16.5 16.5 3 3"/></svg>
+              <input v-model="q" placeholder="Cari judul/lokasi/deskripsi" class="h-full w-full bg-transparent text-emerald-700 placeholder:text-emerald-400 focus:outline-none" />
+            </div>
+            <button
+              class="h-11 w-full rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 text-sm font-semibold text-white shadow-lg shadow-emerald-300/40 transition hover:from-emerald-300 hover:via-emerald-400 hover:to-teal-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!canCreate"
+              @click="openCreate()"
+            >
+              Tambah Kegiatan
+            </button>
+          </div>
+
+          <div class="grid gap-4 text-emerald-800 text-xl sm:grid-cols-2 xl:grid-cols-3">
             <!-- Hari Ini -->
-            <div class="flex-1 rounded-2xl bg-white/10 px-6 py-5 transition-all duration-300 hover:bg-white/20 flex items-center justify-between">
+            <div class="flex items-center justify-between rounded-3xl border border-emerald-100 bg-white px-6 py-5 transition-all duration-300 hover:border-emerald-200">
               <div class="flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7">
-                  <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
-                </svg>
+                <span class="grid h-10 w-10 place-items-center rounded-full bg-emerald-100 text-emerald-600"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></span>
                 <div class="opacity-90 font-medium">Hari Ini</div>
               </div>
-              <div class="text-4xl font-extrabold leading-none tabular-nums">{{ todaysCount }}</div>
+              <div class="text-3xl font-extrabold leading-none tabular-nums text-emerald-600">{{ todaysCount }}</div>
             </div>
             <!-- Minggu Ini -->
-            <div class="flex-1 rounded-2xl bg-white/10 px-6 py-5 transition-all duration-300 hover:bg-white/20 flex items-center justify-between">
+            <div class="flex items-center justify-between rounded-3xl border border-emerald-100 bg-white px-6 py-5 transition-all duration-300 hover:border-emerald-200">
               <div class="flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7">
-                  <path d="M19 3H5a2 2 0 0 0-2 2v3h18V5a2 2 0 0 0-2-2zM3 19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10H3v9z"/>
-                </svg>
+                <span class="grid h-10 w-10 place-items-center rounded-full bg-sky-100 text-sky-600"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M19 3H5a2 2 0 0 0-2 2v3h18V5a2 2 0 0 0-2-2zM3 19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10H3v9z"/></svg></span>
                 <div class="opacity-90 font-medium">Minggu Ini</div>
               </div>
-              <div class="text-4xl font-extrabold leading-none tabular-nums">{{ weeklyCount }}</div>
+              <div class="text-3xl font-extrabold leading-none tabular-nums text-sky-600">{{ weeklyCount }}</div>
             </div>
             <!-- Bulan Ini -->
-            <div class="flex-1 rounded-2xl bg-white/10 px-6 py-5 transition-all duration-300 hover:bg-white/20 flex items-center justify-between">
+            <div class="flex items-center justify-between rounded-3xl border border-emerald-100 bg-white px-6 py-5 transition-all duration-300 hover:border-emerald-200">
               <div class="flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7">
-                  <path d="M7 11h10v2H7v-2zm0 4h10v2H7v-2zM6 3a2 2 0 0 0-2 2v1h16V5a2 2 0 0 0-2-2H6zm14 5H4v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                </svg>
+                <span class="grid h-10 w-10 place-items-center rounded-full bg-amber-100 text-amber-600"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M7 11h10v2H7v-2zm0 4h10v2H7v-2zM6 3a2 2 0 0 0-2 2v1h16V5a2 2 0 0 0-2-2H6zm14 5H4v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg></span>
                 <div class="opacity-90 font-medium">Bulan Ini</div>
               </div>
-              <div class="text-4xl font-extrabold leading-none tabular-nums">{{ monthlyCount }}</div>
+              <div class="text-3xl font-extrabold leading-none tabular-nums text-amber-600">{{ monthlyCount }}</div>
             </div>
           </div>
         </div>
@@ -248,21 +335,26 @@ async function onDelete(evt) {
       
 
       <!-- Calendar grid -->
-      <div class="bg-white rounded-2xl shadow-sm border p-5 relative transition-all duration-300 hover:shadow-lg">
+      <div class="relative rounded-3xl border border-emerald-100 bg-white p-6 shadow-lg transition-all duration-300 hover:shadow-[0_45px_120px_-60px_rgba(16,185,129,0.35)]">
         <div class="relative flex items-center justify-center mb-3">
-          <button class="absolute left-0 inline-flex items-center justify-center h-12 w-12 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 active:scale-95 transition" @click="go(-1, 'month')" aria-label="Bulan sebelumnya">
+          <button class="absolute left-0 inline-flex items-center justify-center h-12 w-12 rounded-full border border-emerald-200 bg-emerald-100 text-emerald-700 transition hover:bg-emerald-200 active:scale-95" @click="go(-1, 'month')" aria-label="Bulan sebelumnya">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7"><path d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
           </button>
           <div class="text-2xl md:text-3xl font-bold text-emerald-600 capitalize">{{ monthTitle }}</div>
-          <button class="absolute right-0 inline-flex items-center justify-center h-12 w-12 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 active:scale-95 transition" @click="go(1, 'month')" aria-label="Bulan berikutnya">
+          <button class="absolute right-0 inline-flex items-center justify-center h-12 w-12 rounded-full border border-emerald-200 bg-emerald-100 text-emerald-700 transition hover:bg-emerald-200 active:scale-95" @click="go(1, 'month')" aria-label="Bulan berikutnya">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7"><path d="M8.25 4.5 15.75 12l-7.5 7.5"/></svg>
           </button>
         </div>
-        <div class="mb-3 text-center">
+        <div class="mb-4 text-center">
           <div class="flex flex-wrap justify-center gap-2">
-            <label v-for="d in divisionOptions" :key="d.id" class="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-base cursor-pointer select-none transition-all hover:shadow-sm"
-                   :class="selectedDivisionIds.includes(d.id) ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-gray-300 text-gray-700'">
-              <input type="checkbox" :value="d.id" v-model="selectedDivisionIds" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-400 h-5 w-5" />
+            <label
+              v-for="d in divisionOptions" :key="d.id"
+              class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium cursor-pointer select-none transition shadow-sm"
+              :class="selectedDivisionIds.includes(d.id)
+                ? 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 border-transparent text-white shadow-md'
+                : 'bg-white text-emerald-600 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50'"
+            >
+              <input type="checkbox" :value="d.id" v-model="selectedDivisionIds" class="h-4 w-4 rounded-full border-emerald-200 text-emerald-500 focus:ring-emerald-400" />
               <span>{{ d.name }}</span>
             </label>
           </div>
@@ -270,45 +362,73 @@ async function onDelete(evt) {
         <MonthView
           :date="currentDate"
           :events="events"
+          :can-create="canCreate"
+          :can-edit="canEdit"
           @select-day="d => { currentDate = d; selectedDay = d }"
           @open-create="openCreate"
           @open-edit="openEdit"
         />
-        <LoadingOverlay v-if="loading" message="Memuat kegiatan…" />
+        <LoadingOverlay v-if="loading" message="Memuat data..." />
       </div>
 
       <!-- Selected day's activities (single card) -->
-<div class="bg-white rounded-2xl shadow-sm border p-5 relative transition-all duration-300 hover:shadow-lg">
-  <div class="mb-3 text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">Kegiatan {{ selectedDay || currentDate }}</div>
-  <SidebarDayList bare :date="selectedDay || currentDate" :events="events" @open-edit="openEdit" @delete-event="onDelete" />
-  <LoadingOverlay v-if="loading" message="Memuat kegiatan..." />
-</div>
-
-      <!-- Selected day's timeline 06:00 - 18:00 -->
-      <div class="bg-white rounded-2xl shadow-sm border p-5 relative transition-all duration-300 hover:shadow-lg">
-        <div class="px-2 py-1 text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
-          Timeline (06:00 - 18:00) — {{ selectedDay || currentDate }}
-        </div>
-        <div class="mt-4">
-          <DayView :date="selectedDay || currentDate" :events="events" :start-hour="6" :end-hour="18" @open-create="() => openCreate(selectedDay || currentDate)" @open-edit="openEdit" />
-        </div>
-        <LoadingOverlay v-if="loading" message="Memuat timeline." />
+      <div class="relative rounded-3xl border border-emerald-100 bg-white p-6 shadow-lg transition-all duration-300 hover:shadow-[0_45px_120px_-60px_rgba(16,185,129,0.35)]">
+        <div class="mb-3 text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 bg-clip-text text-transparent">Kegiatan {{ selectedDay || currentDate }}</div>
+        <SidebarDayList
+          bare
+          :date="selectedDay || currentDate"
+          :events="events"
+          :can-edit="canEdit"
+          :can-delete="canDelete"
+          @open-edit="openEdit"
+          @delete-event="onDelete"
+        />
+        <LoadingOverlay v-if="loading" message="Memuat data..." />
       </div>
 
-<EventFormModal
-  v-if="showForm"
-  :date="selectedDay || currentDate"
-  :event="editingEvent"
-  :division-options="divisionOptions"
-  @close="showForm=false"
-  @saved="onSaved"
-/>
+      <!-- Selected day's timeline 06:00 - 18:00 -->
+      <div class="relative rounded-3xl border border-emerald-100 bg-white p-6 shadow-lg transition-all duration-300 hover:shadow-[0_45px_120px_-60px_rgba(16,185,129,0.35)]">
+        <div class="px-2 py-1 text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 bg-clip-text text-transparent">
+          Timeline (06:00 - 18:00) - {{ selectedDay || currentDate }}
+        </div>
+        <div class="mt-4">
+          <DayView
+            :date="selectedDay || currentDate"
+            :events="events"
+            :start-hour="6"
+            :end-hour="18"
+            :can-create="canCreate"
+            :can-edit="canEdit"
+            @open-create="() => openCreate(selectedDay || currentDate)"
+            @open-edit="openEdit"
+          />
+        </div>
+        <LoadingOverlay v-if="loading" message="Memuat data..." />
+      </div>
+
+      <ProfileSettingsModal
+        v-if="showProfileModal && user"
+        :user="user"
+        @close="closeProfileModal"
+      />
+
+      <EventFormModal
+        v-if="showForm"
+        :date="selectedDay || currentDate"
+        :event="editingEvent"
+        :division-options="divisionOptions"
+        :can-edit="canEdit"
+        :can-delete="canDelete"
+        @close="showForm=false"
+        @saved="onSaved"
+      />
     </div>
-  </div>
+  </section>
 </template>
 
 <style scoped>
 </style>
+
 
 
 

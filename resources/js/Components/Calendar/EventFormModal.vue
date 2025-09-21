@@ -5,6 +5,8 @@ const props = defineProps({
   date: { type: String, required: true },
   event: { type: Object, default: null },
   divisionOptions: { type: Array, default: () => [] },
+  canEdit: { type: Boolean, default: true },
+  canDelete: { type: Boolean, default: true },
 })
 const emit = defineEmits(['close','saved'])
 
@@ -60,14 +62,16 @@ const saving = ref(false)
 
 async function submit() {
   if (saving.value) return
+  if (formReadOnly.value) return
   saving.value = true
+  await ensureSanctumCookie()
   const payload = {
     title: title.value,
     description: description.value || null,
     location: location.value || null,
-    start_at: allDay.value ? props.date + 'T00:00:00' : (props.date + 'T' + startTime.value + ':00'),
-    end_at: allDay.value ? props.date + 'T23:59:00' : (props.date + 'T' + endTime.value + ':00'),
-    all_day: allDay.value,
+    start_at: allDay.value ? (props.date + 'T07:30:00') : (props.date + 'T' + startTime.value + ':00'),
+    end_at: allDay.value ? (props.date + 'T16:00:00') : (props.date + 'T' + endTime.value + ':00'),
+    all_day: false,
     division_ids: divisionIds.value,
   }
   const participants = participantIdsCsv.value.split(',').map(s => parseInt(s.trim(),10)).filter(Boolean)
@@ -86,7 +90,19 @@ async function submit() {
 
   const url = isEdit.value ? `/api/events/${props.event.id}` : '/api/events'
   const method = isEdit.value ? 'PUT' : 'POST'
-  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(payload) })
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+  const res = await fetch(url, {
+    method,
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
+      ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
+    },
+    body: JSON.stringify(payload),
+  })
   if (!res.ok) {
     try {
       const data = await res.json()
@@ -104,13 +120,42 @@ async function submit() {
 }
 
 const deleting = ref(false)
+const formReadOnly = computed(() => !props.canEdit)
+
+let sanctumBootstrapped = false
+
+async function ensureSanctumCookie() {
+  if (sanctumBootstrapped) return
+  await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+  sanctumBootstrapped = true
+}
+
+function xsrfToken() {
+  const value = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('XSRF-TOKEN='))
+    ?.split('=')[1]
+
+  return value ? decodeURIComponent(value) : ''
+}
 
 async function doDelete() {
   if (!isEdit.value) return
   if (!confirm('Hapus kegiatan ini? Tindakan ini tidak dapat dibatalkan.')) return
   if (deleting.value) return
   deleting.value = true
-  const res = await fetch(`/api/events/${props.event.id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } })
+  await ensureSanctumCookie()
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+  const res = await fetch(`/api/events/${props.event.id}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: {
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
+      ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
+    },
+  })
   if (!res.ok) {
     try {
       const data = await res.json()
@@ -137,61 +182,66 @@ async function doDelete() {
       <div class="space-y-4 p-5 overflow-y-auto flex-1">
         <div>
           <label class="block text-sm mb-1 text-gray-700">Judul</label>
-          <input v-model="title" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400" />
+          <input
+            v-model="title"
+            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 disabled:bg-gray-100"
+            :readonly="formReadOnly"
+            :disabled="formReadOnly"
+          />
         </div>
         <div class="grid grid-cols-2 gap-3 items-end">
           <div>
             <label class="block text-sm mb-1 text-gray-700">Tanggal</label>
             <input type="date" :value="date" disabled class="w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-600" />
           </div>
-          <label class="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" v-model="allDay" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" /> <span>Sepanjang hari</span></label>
+          <label class="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" v-model="allDay" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" :disabled="formReadOnly" /> <span>Sepanjang hari</span></label>
           <div>
             <label class="block text-sm mb-1 text-gray-700">Mulai</label>
-            <input type="time" v-model="startTime" :disabled="allDay" class="w-full border rounded-lg px-3 py-2" />
+            <input type="time" v-model="startTime" :disabled="allDay || formReadOnly" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" />
           </div>
           <div>
             <label class="block text-sm mb-1 text-gray-700">Selesai</label>
-            <input type="time" v-model="endTime" :disabled="allDay" class="w-full border rounded-lg px-3 py-2" />
+            <input type="time" v-model="endTime" :disabled="allDay || formReadOnly" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" />
           </div>
         </div>
         <div>
           <label class="block text-sm mb-1 text-gray-700">Lokasi</label>
-          <input v-model="location" class="w-full border rounded-lg px-3 py-2" />
+          <input v-model="location" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" :readonly="formReadOnly" :disabled="formReadOnly" />
         </div>
         <div>
           <label class="block text-sm mb-1 text-gray-700">Deskripsi</label>
-          <textarea v-model="description" class="w-full border rounded-lg px-3 py-2" rows="3" />
+          <textarea v-model="description" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" rows="3" :readonly="formReadOnly" :disabled="formReadOnly" />
         </div>
         <div>
           <label class="block text-sm mb-1 text-gray-700">Divisi Terlibat</label>
           <div class="flex flex-wrap gap-3">
             <label v-for="d in divisionOptions" :key="d.id" class="flex items-center gap-2">
-              <input type="checkbox" :value="d.id" v-model="divisionIds" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" />
+              <input type="checkbox" :value="d.id" v-model="divisionIds" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" :disabled="formReadOnly" />
               <span>{{ d.name }}</span>
             </label>
           </div>
         </div>
         <div>
           <label class="block text-sm mb-1 text-gray-700">Peserta (ID user, pisahkan koma)</label>
-          <input v-model="participantIdsCsv" placeholder="cth: 12,45,71" class="w-full border rounded-lg px-3 py-2" />
+          <input v-model="participantIdsCsv" placeholder="cth: 12,45,71" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" :readonly="formReadOnly" :disabled="formReadOnly" />
         </div>
 
         <div class="border-t pt-3">
           <div class="flex items-center justify-between">
             <label class="text-sm font-medium text-gray-700">Pengulangan</label>
             <label class="inline-flex items-center gap-2 text-sm">
-              <input type="checkbox" v-model="recurrenceEnabled" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" /> Aktif
+              <input type="checkbox" v-model="recurrenceEnabled" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" :disabled="formReadOnly" /> Aktif
             </label>
           </div>
-          <div v-if="recurrenceEnabled" class="mt-3 space-y-3">
+          <div v-if="recurrenceEnabled" class="mt-3 space-y-3" :class="formReadOnly ? 'opacity-60 pointer-events-none' : ''">
             <div class="flex items-center gap-3 flex-wrap">
               <label class="text-sm">Tipe</label>
-              <select v-model="recurrenceType" class="border rounded-lg px-2 py-1">
+              <select v-model="recurrenceType" class="border rounded-lg px-2 py-1" :disabled="formReadOnly">
                 <option value="weekly">Mingguan</option>
                 <option value="monthly">Bulanan</option>
               </select>
               <label class="text-sm">Interval</label>
-              <input type="number" min="1" v-model.number="recurrenceInterval" class="w-20 border rounded-lg px-2 py-1" />
+              <input type="number" min="1" v-model.number="recurrenceInterval" class="w-20 border rounded-lg px-2 py-1" :disabled="formReadOnly" />
               <span class="text-xs text-gray-500" v-if="recurrenceType==='weekly'">(setiap n minggu)</span>
               <span class="text-xs text-gray-500" v-else>(setiap n bulan)</span>
             </div>
@@ -199,27 +249,38 @@ async function doDelete() {
               <div class="text-sm text-gray-700 mb-1">Pilih hari</div>
               <div class="flex flex-wrap gap-2">
                 <label v-for="(nm, idx) in ['Sen','Sel','Rab','Kam','Jum','Sab','Min']" :key="idx" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none">
-                  <input type="checkbox" :value="idx+1" v-model="recurrenceDays" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" />
+                  <input type="checkbox" :value="idx+1" v-model="recurrenceDays" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" :disabled="formReadOnly" />
                   <span>{{ nm }}</span>
                 </label>
               </div>
             </div>
             <div v-else>
               <div class="text-sm text-gray-700 mb-1">Tanggal setiap bulan</div>
-              <input type="number" min="1" max="31" v-model.number="recurrenceMonthDay" class="w-24 border rounded-lg px-2 py-1" />
+              <input type="number" min="1" max="31" v-model.number="recurrenceMonthDay" class="w-24 border rounded-lg px-2 py-1" :disabled="formReadOnly" />
             </div>
             <div>
               <label class="block text-sm mb-1 text-gray-700">Sampai tanggal (opsional)</label>
-              <input type="date" v-model="recurrenceUntil" class="border rounded-lg px-2 py-1" />
+              <input type="date" v-model="recurrenceUntil" class="border rounded-lg px-2 py-1" :disabled="formReadOnly" />
             </div>
           </div>
         </div>
       </div>
       <div class="px-5 py-4 border-t flex items-center justify-between gap-2">
-        <button v-if="isEdit" class="px-4 py-2 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 active:scale-95 transition" @click="doDelete">Hapus</button>
+        <button
+          v-if="isEdit && props.canDelete"
+          class="px-4 py-2 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="formReadOnly || deleting"
+          @click="doDelete"
+        >
+          {{ deleting ? 'Menghapus...' : 'Hapus' }}
+        </button>
         <div class="ml-auto flex items-center gap-2">
           <button class="px-4 py-2 rounded-lg border hover:bg-gray-50 active:scale-95 transition" @click="$emit('close')">Batal</button>
-          <button :disabled="saving" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2" @click="submit">
+          <button
+            :disabled="saving || formReadOnly"
+            class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            @click="submit"
+          >
             <span v-if="saving" class="inline-block h-4 w-4 border-2 border-current border-r-transparent rounded-full animate-spin"></span>
             <span>Simpan</span>
           </button>

@@ -77,6 +77,6 @@ final class LoginLinkController extends Controller
         $magicLink->update(['used_at' => now()]);
         Auth::login($magicLink->user, true);
 
-        return redirect()->route('dashboard');
+        return redirect()->route('calendar.index');
     }
 }

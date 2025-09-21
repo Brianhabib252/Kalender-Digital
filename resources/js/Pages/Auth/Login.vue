@@ -1,260 +1,136 @@
 <script setup>
-import { Link, useForm, usePage } from '@inertiajs/vue3'
-import { useLocalStorage } from '@vueuse/core'
-import { computed, inject, onMounted } from 'vue'
-import { toast } from 'vue-sonner'
+import { Link, useForm } from '@inertiajs/vue3'
+import { computed, inject } from 'vue'
 import InputError from '@/components/InputError.vue'
 import AuthenticationCardLogo from '@/components/LogoRedirect.vue'
-import SocialLoginButton from '@/components/SocialLoginButton.vue'
 import Button from '@/components/ui/button/Button.vue'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Checkbox from '@/components/ui/checkbox/Checkbox.vue'
 import Input from '@/components/ui/input/Input.vue'
 import Label from '@/components/ui/label/Label.vue'
-import Sonner from '@/components/ui/sonner/Sonner.vue'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSeoMetaTags } from '@/composables/useSeoMetaTags.js'
 
 const props = defineProps({
   canResetPassword: Boolean,
   status: String,
-  availableOauthProviders: Object,
 })
 
-const page = usePage()
 const route = inject('route')
-const activeTab = useLocalStorage('login-active-tab', 'password')
 
-// Form state
-const passwordForm = useForm({
-  email: 'test@example.com',
-  password: 'password',
+const form = useForm({
+  email: '',
+  password: '',
   remember: false,
 })
 
-const loginLinkForm = useForm({
-  email: '',
-})
+const isProcessing = computed(() => form.processing)
 
-// Computed
-const hasOauthProviders = computed(() =>
-  Object.keys(props.availableOauthProviders || {}).length > 0,
-)
-
-const isProcessing = computed(() =>
-  passwordForm.processing || loginLinkForm.processing,
-)
-
-// Methods
-function handlePasswordLogin() {
-  passwordForm
+function submit() {
+  form
     .transform(data => ({
       ...data,
+      email: data.email.trim(),
       remember: data.remember ? 'on' : '',
     }))
     .post(route('login'), {
-      onFinish: () => passwordForm.reset('password'),
+      onFinish: () => form.reset('password'),
     })
 }
 
-function handleLoginLink() {
-  loginLinkForm.post(route('login-link.store'), {
-    onSuccess: () => {
-      loginLinkForm.reset()
-      if (page.props.flash.success) {
-        toast.success(page.props.flash.success)
-      }
-    },
-    onError: () => {
-      if (page.props.flash.error) {
-        toast.error(page.props.flash.error)
-      }
-    },
-  })
-}
-
-// Lifecycle
-onMounted(() => {
-  if (page.props.flash.error) {
-    toast.error(page.props.flash.error)
-  }
-
-  if (page.props.flash.success) {
-    toast.success(page.props.flash.success)
-  }
-})
-
-// SEO
 useSeoMetaTags({
   title: 'Log in',
 })
 </script>
 
 <template>
-  <Sonner position="top-center" />
-
-  <div class="flex min-h-screen flex-col items-center justify-center bg-linear-to-b from-background/50 to-background">
-    <Card class="mx-auto w-[420px] shadow-lg transition-all duration-300 hover:shadow-xl">
-      <!-- Header -->
-      <CardHeader>
-        <CardTitle class="flex justify-center">
-          <AuthenticationCardLogo />
-        </CardTitle>
-        <CardDescription class="text-center text-2xl font-light">
-          Welcome Back
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent>
-        <!-- Status Message -->
-        <div v-if="status" class="mb-4 text-sm font-medium text-green-600">
-          {{ status }}
-        </div>
-
-        <!-- Login Tabs -->
-        <Tabs v-model="activeTab" class="w-full">
-          <TabsList class="grid w-full grid-cols-2 rounded-lg p-1">
-            <TabsTrigger value="password">
-              Password
-            </TabsTrigger>
-            <TabsTrigger value="login-link">
-              Login Link
-            </TabsTrigger>
-          </TabsList>
-
-          <div class="mt-6">
-            <!-- Password Login -->
-            <TabsContent value="password" class="space-y-4">
-              <form @submit.prevent="handlePasswordLogin">
-                <div class="grid gap-4">
-                  <!-- Email -->
-                  <div class="grid gap-2">
-                    <Label for="email">Email</Label>
-                    <Input
-                      id="email"
-                      v-model="passwordForm.email"
-                      type="email"
-                      placeholder="name@example.com"
-                      required
-                      autofocus
-                      autocomplete="username"
-                    />
-                    <InputError :message="passwordForm.errors.email" />
-                  </div>
-
-                  <!-- Password -->
-                  <div class="grid gap-2">
-                    <div class="flex items-center justify-between">
-                      <Label for="password">Password</Label>
-                      <Link
-                        v-if="canResetPassword"
-                        :href="route('password.request')"
-                        class="text-sm text-muted-foreground hover:text-primary hover:underline underline-offset-4"
-                      >
-                        Forgot password?
-                      </Link>
-                    </div>
-                    <Input
-                      id="password"
-                      v-model="passwordForm.password"
-                      type="password"
-                      required
-                      autocomplete="current-password"
-                    />
-                    <InputError :message="passwordForm.errors.password" />
-                  </div>
-
-                  <!-- Remember Me -->
-                  <div class="flex items-center space-x-2">
-                    <Checkbox
-                      id="remember"
-                      v-model:checked="passwordForm.remember"
-                      name="remember"
-                    />
-                    <label for="remember" class="text-sm text-muted-foreground">
-                      Remember me
-                    </label>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    class="w-full"
-                    :class="{ 'opacity-75': passwordForm.processing }"
-                    :disabled="isProcessing"
-                  >
-                    {{ passwordForm.processing ? 'Signing in...' : 'Sign in' }}
-                  </Button>
-                </div>
-              </form>
-            </TabsContent>
-
-            <!-- Login Link -->
-            <TabsContent value="login-link" class="space-y-4">
-              <div class="text-sm text-muted-foreground">
-                We'll send you a login link for password-free sign in.
-              </div>
-              <form @submit.prevent="handleLoginLink">
-                <div class="grid gap-4">
-                  <div class="grid gap-2">
-                    <Label for="login-link-email">Email</Label>
-                    <Input
-                      id="login-link-email"
-                      v-model="loginLinkForm.email"
-                      type="email"
-                      required
-                      placeholder="name@example.com"
-                    />
-                    <InputError :message="loginLinkForm.errors.email" />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    class="w-full"
-                    :class="{ 'opacity-75': loginLinkForm.processing }"
-                    :disabled="isProcessing"
-                  >
-                    {{ loginLinkForm.processing ? 'Sending...' : 'Send Login Link' }}
-                  </Button>
-                </div>
-              </form>
-            </TabsContent>
-          </div>
-        </Tabs>
-
-        <!-- OAuth Section -->
-        <div v-if="hasOauthProviders" class="mt-6">
-          <div class="relative">
-            <div class="absolute inset-0 flex items-center">
-              <span class="w-full border-t" />
-            </div>
-            <div class="relative flex justify-center text-xs uppercase">
-              <span class="bg-background px-2 text-muted-foreground">
-                Or continue with
+  <main class="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50">
+    <div class="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-4 py-16">
+      <div class="grid gap-10 rounded-3xl border border-emerald-100 bg-white/80 p-8 shadow-[0_45px_120px_-60px_rgba(16,185,129,0.55)] md:grid-cols-[1.05fr,0.95fr] md:p-14">
+        <section class="flex flex-col items-center justify-center text-center text-emerald-900">
+          <div class="max-w-lg space-y-6">
+            <div class="flex items-center justify-center gap-6">
+              <span class="flex items-center justify-center">
+                <AuthenticationCardLogo />
               </span>
+              <p class="text-4xl font-bold uppercase tracking-[0.55em] text-emerald-600 md:text-5xl">Kalender Digital</p>
             </div>
+            <p class="text-base text-emerald-800/85 md:text-lg">
+              Kelola agenda lembaga, lihat timeline harian, dan pantau keterlibatan divisi dalam satu tampilan yang konsisten.
+            </p>
+          </div>
+        </section>
+        <section class="rounded-3xl border border-emerald-100 bg-white p-8 text-slate-700 shadow-xl">
+          <header class="space-y-1">
+            <h2 class="text-2xl font-semibold text-slate-900">Masuk ke akun</h2>
+            <p class="text-sm text-slate-500">Gunakan kredensial internal Anda untuk melanjutkan.</p>
+          </header>
+
+          <div v-if="status" class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+            {{ status }}
           </div>
 
-          <div class="mt-6 grid gap-2">
-            <SocialLoginButton
-              v-for="provider in availableOauthProviders"
-              :key="provider.slug"
-              :provider="provider"
+          <form class="mt-8 space-y-6" @submit.prevent="submit">
+            <div class="space-y-2">
+              <Label for="email" class="text-sm font-medium text-slate-600">Email</Label>
+              <Input
+                id="email"
+                v-model="form.email"
+                type="email"
+                placeholder="nama@kantor.go.id"
+                autocomplete="username"
+                required
+                class="h-11 w-full rounded-xl border border-emerald-100 bg-white text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:ring-emerald-300"
+              />
+              <InputError :message="form.errors.email" />
+            </div>
+
+            <div class="space-y-2">
+              <div class="flex items-center justify-between text-sm">
+                <Label for="password" class="font-medium text-slate-600">Password</Label>
+                <Link
+                  v-if="canResetPassword"
+                  :href="route('password.request')"
+                  class="text-emerald-500 transition hover:text-emerald-400"
+                >
+                  Lupa password?
+                </Link>
+              </div>
+              <Input
+                id="password"
+                v-model="form.password"
+                type="password"
+                autocomplete="current-password"
+                required
+                class="h-11 w-full rounded-xl border border-emerald-100 bg-white text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:ring-emerald-300"
+              />
+              <InputError :message="form.errors.password" />
+            </div>
+
+            <div class="flex items-center justify-between text-sm text-slate-500">
+              <label class="inline-flex items-center gap-2 font-medium">
+                <Checkbox id="remember" v-model:checked="form.remember" name="remember" class="border-emerald-200 text-emerald-500" />
+                Ingat saya
+              </label>
+            </div>
+
+            <Button
+              type="submit"
+              class="w-full rounded-xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-400/40 transition hover:from-emerald-300 hover:via-emerald-400 hover:to-teal-300"
+              :class="{ 'opacity-70': isProcessing }"
               :disabled="isProcessing"
-            />
-          </div>
-        </div>
+            >
+              {{ isProcessing ? 'Memproses...' : 'Masuk' }}
+            </Button>
+          </form>
 
-        <!-- Sign Up Link -->
-        <div class="mt-6 text-center text-sm text-muted-foreground">
-          Don't have an account?
-          <Link
-            :href="route('register')"
-            class="font-medium text-primary hover:underline underline-offset-4"
-          >
-            Sign up
-          </Link>
-        </div>
-      </CardContent>
-    </Card>
-  </div>
+          <p class="mt-6 text-center text-sm text-slate-500">
+            Belum punya akun?
+            <Link :href="route('register')" class="font-semibold text-emerald-500 hover:text-emerald-400">
+              Daftar sekarang
+            </Link>
+          </p>
+        </section>
+      </div>
+    </div>
+  </main>
 </template>
+

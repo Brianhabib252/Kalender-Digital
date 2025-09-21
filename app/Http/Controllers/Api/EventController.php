@@ -7,8 +7,10 @@ use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventRequest;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
+use App\Models\EventChangeLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
 
 class EventController extends Controller
 {
@@ -191,6 +193,8 @@ class EventController extends Controller
 
     public function store(StoreEventRequest $request)
     {
+        $this->authorize('create', Event::class);
+
         $data = $request->validated();
         $event = new Event();
         $payload = Arr::only($data, ['title','description','location','start_at','end_at','all_day']);
@@ -220,12 +224,43 @@ class EventController extends Controller
             $event->divisions()->sync($data['division_ids']);
         }
 
+        // Log create
+        if (Schema::hasTable('event_change_logs')) {
+            $divisionIds = array_values($data['division_ids'] ?? []);
+            $participantIds = array_values($data['participant_user_ids'] ?? []);
+            $changes = [
+                'title' => [null, $event->title],
+                'description' => [null, $event->description],
+                'location' => [null, $event->location],
+                'start_at' => [null, optional($event->start_at)->toIso8601String()],
+                'end_at' => [null, optional($event->end_at)->toIso8601String()],
+                'all_day' => [null, (bool)$event->all_day],
+                'recurrence_type' => [null, $event->recurrence_type],
+                'recurrence_rule' => [null, $event->recurrence_rule],
+                'recurrence_until' => [null, $event->recurrence_until?->toDateString()],
+                'division_ids' => [[], $divisionIds],
+                'participant_user_ids' => [[], $participantIds],
+            ];
+            EventChangeLog::query()->create([
+                'event_id' => $event->id,
+                'actor_id' => $request->user()?->id,
+                'action' => 'create_event',
+                'changes' => $changes,
+            ]);
+        }
+
         return new EventResource($event->load(['participantUsers:id,name,division_id', 'participantUsers.division:id,name', 'divisions:id,name']));
     }
 
     public function update(UpdateEventRequest $request, Event $event)
     {
+        $this->authorize('update', $event);
+
         $data = $request->validated();
+        // Keep originals for diff
+        $original = $event->only(['title','description','location','start_at','end_at','all_day','recurrence_type','recurrence_rule','recurrence_until']);
+        $origDivIds = $event->divisions()->pluck('divisions.id')->all();
+        $origPartIds = $event->participantUsers()->pluck('users.id')->all();
         $payload = Arr::only($data, ['title','description','location','start_at','end_at','all_day']);
         $event->fill($payload);
         // Recurrence (update)
@@ -257,12 +292,76 @@ class EventController extends Controller
             $event->divisions()->sync($data['division_ids'] ?? []);
         }
 
+        // Log update
+        if (Schema::hasTable('event_change_logs')) {
+            $now = $event->only(['title','description','location','start_at','end_at','all_day','recurrence_type','recurrence_rule','recurrence_until']);
+            // normalize datetimes/booleans
+            $normalize = function ($k, $v) {
+                if ($k === 'start_at' || $k === 'end_at') return optional($v)->toIso8601String();
+                if ($k === 'recurrence_until') return $v ? (string) $v : null;
+                if ($k === 'all_day') return (bool) $v;
+                return $v;
+            };
+            $changes = [];
+            foreach ($now as $k => $v) {
+                $old = $original[$k] ?? null;
+                $nv = $normalize($k, $v);
+                $ov = $normalize($k, $old);
+                if ($ov !== $nv) $changes[$k] = [$ov, $nv];
+            }
+            $newDivIds = $event->divisions()->pluck('divisions.id')->all();
+            $newPartIds = $event->participantUsers()->pluck('users.id')->all();
+            sort($origDivIds); sort($newDivIds); sort($origPartIds); sort($newPartIds);
+            if ($origDivIds !== $newDivIds) $changes['division_ids'] = [$origDivIds, $newDivIds];
+            if ($origPartIds !== $newPartIds) $changes['participant_user_ids'] = [$origPartIds, $newPartIds];
+            if (!empty($changes)) {
+                EventChangeLog::query()->create([
+                    'event_id' => $event->id,
+                    'actor_id' => $request->user()?->id,
+                    'action' => 'update_event',
+                    'changes' => $changes,
+                ]);
+            }
+        }
+
         return new EventResource($event->load(['participantUsers:id,name,division_id', 'participantUsers.division:id,name', 'divisions:id,name']));
     }
 
-    public function destroy(Event $event)
+    public function destroy(Request $request, Event $event)
     {
+        $this->authorize('delete', $event);
+
+        // snapshot before delete
+        $snapshot = [
+            'title' => $event->title,
+            'description' => $event->description,
+            'location' => $event->location,
+            'start_at' => optional($event->start_at)->toIso8601String(),
+            'end_at' => optional($event->end_at)->toIso8601String(),
+            'all_day' => (bool)$event->all_day,
+            'recurrence_type' => $event->recurrence_type,
+            'recurrence_rule' => $event->recurrence_rule,
+            'recurrence_until' => $event->recurrence_until?->toDateString(),
+            'division_ids' => $event->divisions()->pluck('divisions.id')->all(),
+            'participant_user_ids' => $event->participantUsers()->pluck('users.id')->all(),
+        ];
+
+        // Log BEFORE deleting so FK is valid; ON DELETE SET NULL will nullify event_id after deletion
+        if (Schema::hasTable('event_change_logs')) {
+            $changes = [];
+            foreach ($snapshot as $k => $v) {
+                $changes[$k] = [$v, null];
+            }
+            EventChangeLog::query()->create([
+                'event_id' => $event->id,
+                'actor_id' => $request->user()?->id,
+                'action' => 'delete_event',
+                'changes' => $changes,
+            ]);
+        }
+
         $event->delete();
+
         return response()->noContent();
     }
 }

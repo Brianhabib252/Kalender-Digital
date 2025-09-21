@@ -47,6 +47,11 @@ final class FortifyServiceProvider extends ServiceProvider
         RateLimiter::for('two-factor', fn (Request $request) => Limit::perMinute(5)->by($request->session()->get('login.id')));
 
         $this->configureLoginView();
+        $this->configureRegisterView();
+        $this->configurePasswordResetViews();
+        $this->configureEmailVerificationView();
+        $this->configureConfirmPasswordView();
+        $this->configureTwoFactorChallengeView();
     }
 
     private function configureLoginView(): void
@@ -57,4 +62,42 @@ final class FortifyServiceProvider extends ServiceProvider
             'status' => session('status'),
         ]));
     }
+
+    private function configureRegisterView(): void
+    {
+        Fortify::registerView(fn () => Inertia::render('Auth/Register', [
+            'canLogin' => Route::has('login'),
+        ]));
+    }
+
+    private function configurePasswordResetViews(): void
+    {
+        Fortify::requestPasswordResetLinkView(fn () => Inertia::render('Auth/ForgotPassword', [
+            'status' => session('status'),
+        ]));
+
+        Fortify::resetPasswordView(fn (Request $request) => Inertia::render('Auth/ResetPassword', [
+            'email' => trim((string) $request->input('email', '')),
+            'token' => (string) $request->route('token'),
+        ]));
+    }
+
+    private function configureEmailVerificationView(): void
+    {
+        Fortify::verifyEmailView(fn () => Inertia::render('Auth/VerifyEmail', [
+            'status' => session('status'),
+        ]));
+    }
+
+    private function configureConfirmPasswordView(): void
+    {
+        Fortify::confirmPasswordView(fn () => Inertia::render('Auth/ConfirmPassword'));
+    }
+
+    private function configureTwoFactorChallengeView(): void
+    {
+        Fortify::twoFactorChallengeView(fn () => Inertia::render('Auth/TwoFactorChallenge'));
+    }
 }
+
+

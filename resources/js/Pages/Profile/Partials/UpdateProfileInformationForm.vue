@@ -16,6 +16,8 @@ const form = useForm({
   _method: 'PUT',
   name: props.user.name,
   email: props.user.email,
+  nip: props.user.nip ?? '',
+  phone: props.user.phone ?? '',
   photo: null,
 })
 
@@ -81,13 +83,9 @@ function clearPhotoFileInput() {
 
 <template>
   <FormSection @submitted="updateProfileInformation">
-    <template #title>
-      Profile Information
-    </template>
+    <template #title />
 
-    <template #description>
-      Update your account's profile information and email address.
-    </template>
+    <template #description />
 
     <template #form>
       <!-- Profile Photo -->
@@ -132,6 +130,26 @@ function clearPhotoFileInput() {
           autocomplete="name"
         />
         <InputError :message="form.errors.name" class="mt-2" />
+      </div>
+
+      <!-- NIP -->
+      <div class="col-span-6 sm:col-span-4">
+        <Label for="nip">NIP</Label>
+        <Input
+          id="nip" v-model="form.nip" type="text" class="mt-1 block w-full" required
+          autocomplete="off"
+        />
+        <InputError :message="form.errors.nip" class="mt-2" />
+      </div>
+
+      <!-- Phone -->
+      <div class="col-span-6 sm:col-span-4">
+        <Label for="phone">Nomor Telepon</Label>
+        <Input
+          id="phone" v-model="form.phone" type="text" class="mt-1 block w-full" required
+          autocomplete="tel"
+        />
+        <InputError :message="form.errors.phone" class="mt-2" />
       </div>
 
       <!-- Email -->

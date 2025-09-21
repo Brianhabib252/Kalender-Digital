@@ -25,7 +25,7 @@ final class SubscriptionController extends Controller
     public function index(): RedirectResponse
     {
         if (! Config::get('cashier.billing_enabled')) {
-            return redirect()->route('dashboard');
+            return redirect()->route('calendar.index');
         }
 
         return type(Auth::user())->as(User::class)->redirectToBillingPortal(route('subscriptions.create'));
@@ -37,7 +37,7 @@ final class SubscriptionController extends Controller
     public function create(Request $request): Response|RedirectResponse
     {
         if (! Config::get('cashier.billing_enabled')) {
-            return redirect()->route('dashboard');
+            return redirect()->route('calendar.index');
         }
 
         /** @var User $user */
@@ -61,7 +61,7 @@ final class SubscriptionController extends Controller
     public function show(string $subscription): Checkout|RedirectResponse
     {
         if (! Config::get('cashier.billing_enabled')) {
-            return redirect()->route('dashboard');
+            return redirect()->route('calendar.index');
         }
 
         /** @var array<int, array<string, mixed>> $subscriptionConfig */

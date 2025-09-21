@@ -13,6 +13,7 @@ use App\Actions\Jetstream\DeleteUser;
 use App\Actions\Fortify\CreateNewUser;
 use Illuminate\Database\Eloquent\Collection;
 use App\Actions\Fortify\UpdateUserProfileInformation;
+use Illuminate\Validation\Rule;
 
 /**
  * @group User management
@@ -45,10 +46,12 @@ final class ApiUserController extends Controller
         Gate::authorize('create', User::class);
 
         return app(CreateNewUser::class)->create([
-            'name' => (string) $request->string('name'),
-            'email' => (string) $request->string('email'),
-            'password' => (string) $request->string('password'),
-            'password_confirmation' => (string) $request->string('password_confirmation'),
+            'name' => (string) $request->input('name'),
+            'email' => (string) $request->input('email'),
+            'nip' => (string) $request->input('nip'),
+            'phone' => (string) $request->input('phone'),
+            'password' => (string) $request->input('password'),
+            'password_confirmation' => (string) $request->input('password_confirmation'),
             'terms' => 'true',
         ]);
     }
@@ -73,11 +76,27 @@ final class ApiUserController extends Controller
         Gate::authorize('update', $user);
 
         app(UpdateUserProfileInformation::class)->update($user, [
-            'name' => $request->name,
-            'email' => $request->email,
+            'name' => (string) ($request->input('name') ?? $user->name),
+            'email' => (string) ($request->input('email') ?? $user->email),
+            'nip' => (string) ($request->input('nip') ?? $user->nip),
+            'phone' => (string) ($request->input('phone') ?? $user->phone),
         ]);
 
-        return $user;
+        if ($request->filled('role')) {
+            abort_unless($request->user() instanceof User && $request->user()->isAdmin(), 403);
+
+            $validatedRole = $request->validate([
+                'role' => [Rule::in([User::ROLE_VIEWER, User::ROLE_EDITOR])],
+            ]);
+
+            if ($user->email === User::ADMIN_EMAIL) {
+                $validatedRole['role'] = User::ROLE_ADMIN;
+            }
+
+            $user->forceFill(['role' => $validatedRole['role']])->save();
+        }
+
+        return $user->refresh();
     }
 
     /**

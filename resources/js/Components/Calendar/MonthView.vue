@@ -6,6 +6,8 @@ import EventChip from './EventChip.vue'
 const props = defineProps({
   date: { type: String, required: true },
   events: { type: Array, default: () => [] },
+  canCreate: { type: Boolean, default: true },
+  canEdit: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['select-day','open-create','open-edit'])
@@ -28,6 +30,15 @@ function ymd(d) {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const da = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${da}`
+}
+
+function handleOpenCreate(day) {
+  if (!props.canCreate) return
+  emit('open-create', day)
+}
+
+function handleOpenEdit(event) {
+  emit('open-edit', event)
 }
 
 const weeks = computed(() => {
@@ -78,7 +89,13 @@ function isWeekend(d) { const g = d.getDay(); return g === 0 || g === 6 }
             <template #header>
               <div class="relative h-12">
                 <!-- Always show +Buat -->
-                <button class="absolute right-0 top-0 text-[12px] text-emerald-600 hover:text-emerald-700" @click.stop="() => emit('open-create', ymd(d))">+ Buat</button>
+                <button
+                  class="absolute right-0 top-0 text-[12px] text-emerald-600 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!props.canCreate"
+                  @click.stop="() => handleOpenCreate(ymd(d))"
+                >
+                  + Buat
+                </button>
                 <!-- If empty: big centered number without inner box -->
                 <div v-if="eventsOfDay(d).length === 0" class="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div :class="[
@@ -95,7 +112,11 @@ function isWeekend(d) { const g = d.getDay(); return g === 0 || g === 6 }
             </template>
             <div class="space-y-1 mt-1">
               <template v-for="(e,i) in eventsOfDay(d).slice(0,3)" :key="e.id + ':' + i">
-                <EventChip :event="e" @click="() => emit('open-edit', e)" />
+                <EventChip
+                  :event="e"
+                  :class="props.canEdit ? '' : 'opacity-60'"
+                  @click="() => handleOpenEdit(e)"
+                />
               </template>
               <div v-if="eventsOfDay(d).length > 3" class="text-[10px] text-gray-500">+{{ eventsOfDay(d).length-3 }} lainnya</div>
             </div>

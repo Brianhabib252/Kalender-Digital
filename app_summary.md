@@ -1,273 +1,226 @@
-# Alur Fitur Utama – Aplikasi Kalender Digital (Laravel + Vue.js + TailwindCSS + Inertia)
+# Ringkasan Proyek: Kalender Digital (Laravel 12 + Inertia + Vue 3)
+
+Dokumen ini merangkum framework, peran berkas penting, alur database, endpoint, dan workflow aplikasi Kalender Digital dalam repositori ini.
+
+—
+
+## Stack & Framework
+
+- Backend: Laravel 12 (`artisan`, `composer.json`)
+- SPA: Inertia.js + Vue 3 + Vite (`resources/js/app.js`, `vite.config.ts`, `package.json`)
+- UI: Tailwind CSS (`postcss.config.js`, `resources/css/app.css`)
+- Auth: Jetstream + Fortify + Sanctum; Social login via Socialite
+- Teams: Jetstream Teams
+- Billing: Stripe via Laravel Cashier (`config/cashier.php`, `config/subscriptions.php`)
+- Admin: Filament 3 (panel tersedia)
+- API Docs: Scribe (`config/scribe.php`, `resources/views/scribe/index.blade.php`)
+- Observability/Perf: Sentry, Telescope, Octane
+- FE routing helper: Ziggy
 
-Dokumen ini menjelaskan *alur kerja* (flow) fitur-fitur utama aplikasi kalender internal untuk mengelola kegiatan berdasarkan tanggal & jam, menampilkan siapa/ divisi yang terlibat, timeline harian, rekap mingguan/bulanan, serta filter berdasarkan divisi.
+—
 
----
+## Struktur Proyek (Tingkat Tinggi)
 
-## 1) Ringkasan Tujuan
+- `routes/web.php`: Route web (auth, dashboard, chat, subscriptions) + include `calendar.php`.
+- `routes/calendar.php`: Halaman kalender (Inertia) di `/calendar`.
+- `routes/api.php`: API dasar + include `api_calendar.php`.
+- `routes/api_calendar.php`: Endpoint CRUD event (`/api/events`).
+- `app/Http/Controllers/*`: Controller web & API (lihat ringkas di bawah).
+- `app/Http/Requests/*`: Validasi request Event (store/update) dan admin user.
+- `app/Models/*`: Model Eloquent (Event, Division, User, dst.).
+- `app/Policies/*`: Kebijakan akses (EventPolicy, UserPolicy, dst.).
+- `database/migrations/*`: Skema database (users, divisions, events, pivot, recurrence, dst.).
+- `database/seeders/*`: Seeder Divisi dan contoh Event.
+- `resources/js/Pages/*`: Halaman Inertia (Calendar, Auth, Profile, Teams, Subscriptions, Chat, Welcome).
+- `resources/js/Components/*`: Komponen Vue (kalender dan UI primitives).
+- `resources/views/*`: Blade dasar (`app.blade.php`) dan view email/prompt/docs.
 
-* **Input kegiatan** pada tanggal & jam tertentu.
-* **Kalender multi‑view**: Bulan, Minggu, Hari (dengan timeline jam).
-* **Detail per tanggal**: daftar kegiatan, peserta (nama & divisi), lokasi/notes.
-* **Rekap**: jumlah kegiatan per minggu & per bulan.
-* **Filter**: divisi (Seluruh Pegawai, Hakim, Kesekretariatan, Kepaniteraan).
-* **Teknologi**: Backend Laravel (API + Eloquent), Frontend Vue 3 + Inertia, styling Tailwind.
+—
 
----
+## Routing & Endpoint Utama
 
-## 2) Peran Pengguna (opsional, jika dibutuhkan)
+Web routes (`routes/web.php`):
 
-* **Admin**: CRUD kegiatan, kelola peserta & divisi, set akses.
-* **User**: Lihat kalender, filter kegiatan, buat/ubah kegiatan yang ia kelola.
-* (Opsional) **Viewer**: hanya membaca jadwal.
+- `/`: Redirect ke `login`.
+- `/dashboard`: Redirect ke kalender (`DashboardController`).
+- `/calendar`: Halaman kalender (middleware `auth:sanctum`, Jetstream auth session; lihat `routes/calendar.php`).
+- `auth/*`: OAuth redirect/callback dan magic link (rate-limited + signed URL).
+- `/chat`: Chat (opsional; integrasi Prism, akses setelah login).
+- `/subscriptions`: Manajemen langganan (Cashier) — `index/create/show`.
 
----
+API routes (`routes/api.php`, `routes/api_calendar.php`):
 
-## 3) Struktur Data Inti
+- `GET /api/events`: Ambil event berdasarkan rentang `start/end`, pencarian `q`, dan filter `division[]`.
+- `POST /api/events`: Buat event (beserta peserta dan divisi; dukung recurrence).
+- `PUT /api/events/{event}`: Perbarui event (field, peserta, divisi, recurrence).
+- `DELETE /api/events/{event}`: Hapus event.
+- `apiResource('user', ...)`: API manajemen user (Sanctum) — index, store, show, update, destroy.
+
+—
+
+## Controllers (Ringkas Per Berkas)
+
+- `app/Http/Controllers/CalendarController.php`: Render halaman Inertia `Calendar/Index`; memastikan divisi default tersedia; mengirim `today`, `view`, `date`, `divisionOptions`.
+- `app/Http/Controllers/DashboardController.php`: Satu aksi `__invoke` untuk redirect ke `calendar.index`.
+- `app/Http/Controllers/Api/EventController.php`: CRUD event + ekspansi recurrence mingguan/bulanan dalam rentang diminta; filter teks dan divisi; respon JSON via `EventResource`.
+- `app/Http/Controllers/ApiUserController.php`: API user berbasis Sanctum dan Jetstream (list user tim, buat user via `CreateNewUser`, update profil via `UpdateUserProfileInformation`, hapus via `DeleteUser`).
+- `app/Http/Controllers/User/OauthController.php`: Alur OAuth (redirect/callback/link/unlink) sesuai `config/oauth.php`.
+- `app/Http/Controllers/User/LoginLinkController.php`: Magic link (buat token, kirim email, login via URL bertanda tangan).
+- `app/Http/Controllers/SubscriptionController.php`: Halaman/aksi langganan Stripe (Cashier) termasuk portal dan checkout.
+- `app/Http/Controllers/ChatController.php`: Halaman chat; memeriksa status subscription dan menyiapkan model Prism.
 
-Minimal skema tabel (bisa disesuaikan):
+—
 
-**users**
+## Requests (Validasi Input)
 
-* id, name, email, division\_id (nullable jika pakai pivot multi‑divisi), role
+- `app/Http/Requests/StoreEventRequest.php`: Validasi pembuatan event (judul, waktu, lokasi, `all_day`, `participant_user_ids.*`, `division_ids.*`, serta `recurrence_*`).
+- `app/Http/Requests/UpdateEventRequest.php`: Validasi pembaruan event (aturan mirip, sifatnya `sometimes`).
+- `app/Http/Requests/Admin/UpdateManagedUserRequest.php`: Validasi update user dari panel admin (nama, email, nip/phone, role, password opsional).
 
-**divisions**
+—
 
-* id, name // enum: Seluruh Pegawai, Hakim, Kesekretariatan, Kepaniteraan
+## Models & Relasi (inti kalender)
 
-**events**
+- `app/Models/Event.php`
+  - Fillable: `title, description, location, start_at, end_at, all_day, created_by, recurrence_type, recurrence_rule, recurrence_until`.
+  - Casts: `start_at`/`end_at` datetime, `all_day` boolean, `recurrence_rule` array, `recurrence_until` date.
+  - Relasi: `creator` (User), `participantUsers` (pivot `event_participants` + `participant_role`), `divisions` (pivot `event_divisions`).
+  - Scope: `overlap(start,end)` untuk ambil event yang beririsan rentang.
+- `app/Models/Division.php`
+  - Fillable: `name`; Relasi: `users` (hasMany), `events` (belongsToMany via `event_divisions`).
+- `app/Models/User.php`
+  - Peran: `admin`, `editor`, `viewer`; konstanta `ADMIN_EMAIL` untuk admin default.
+  - Trait: Jetstream Teams, Sanctum, Cashier, Profile Photo, 2FA.
+  - Guarded default; casts termasuk `password` hashed, `role` string.
+  - Method util: `isAdmin()/isEditor()/isViewer()`; `canAccessPanel()` Filament true.
 
-* id, title, description, location
-* start\_at (datetime), end\_at (datetime)
-* all\_day (boolean, default false)
-* created\_by (user\_id)
+—
 
-**event\_participants** (pivot)
+## Policies & Peran
 
-* id, event\_id, user\_id, participant\_role (opsional: organizer/member)
+- `app/Policies/EventPolicy.php`
+  - `before`: admin selalu diizinkan.
+  - `create`: admin/editor.
+  - `update/delete`: editor hanya untuk event yang ia buat; admin diizinkan lewat `before`.
+- `app/Policies/UserPolicy.php`
+  - Berbasis Jetstream Teams + Sanctum token ability (`read/create/update/delete`).
+  - Pembatasan penghapusan diri sendiri; hanya admin yang boleh hapus user lain.
 
-**event\_divisions** (opsional bila kegiatan bersifat lintas divisi tanpa menentukan orang satu per satu)
+—
 
-* id, event\_id, division\_id
+## Resource Serializer
 
-> Catatan: Jika setiap user pasti punya satu divisi, cukup join melalui **users.division\_id** untuk menurunkan informasi divisi. Jika kegiatan melibatkan divisi secara umum (tanpa daftar nama), gunakan tabel **event\_divisions**.
+- `app/Http/Resources/EventResource.php`: Serialisasi event ke JSON (termasuk divisions, participants dengan division mereka, dan `occurrence_key` untuk instance recurrence).
 
----
+—
 
-## 4) Alur Fitur Utama
+## Skema Database & Alur Data
 
-### 4.1 Membuat/ Mengubah Kegiatan (Create/Update Flow)
+Migrations utama:
 
-1. **Akses Form**: tombol "Buat Kegiatan" dari tampilan Kalender atau dari tombol global (+).
-2. **Isi Form**: title, tanggal & jam mulai/selesai, all‑day (opsional), lokasi, deskripsi.
-3. **Pilih Keterlibatan**:
+- `0001_01_01_000000_create_users_table.php`: Tabel user dasar (Jetstream/Cashier field umum).
+- `2025_09_20_000001_add_nip_and_phone_to_users_table.php`: Tambah kolom `nip` dan `phone` pada users.
+- `2025_09_20_010000_add_role_to_users_table.php`: Tambah `role` (default `viewer`) dan set admin untuk email `brianhabib252@gmail.com`.
+- `2025_01_01_000000_create_divisions_table.php`: Tabel `divisions` (`name` unik).
+- `2025_01_01_000100_add_division_id_to_users_table.php`: Foreign key opsional `users.division_id -> divisions.id`.
+- `2025_01_01_000200_create_events_table.php`: Tabel `events` (judul, waktu, lokasi, `all_day`, `created_by`, + kolom recurrence).
+- `2025_01_01_000300_create_event_participants_table.php`: Pivot `event_participants` (`event_id`, `user_id`, `participant_role`, unik gabungan).
+- `2025_01_01_000400_create_event_divisions_table.php`: Pivot `event_divisions` (`event_id`, `division_id`, unik gabungan).
+- `2025_01_01_000450_add_recurrence_to_events_table.php`: Guarded add kolom recurrence bila belum ada.
 
-   * Tambah peserta (autocomplete user), **atau**
-   * Tambah divisi (checkbox: Hakim, Kesekretariatan, Kepaniteraan, Seluruh Pegawai).
-4. **Validasi**: pastikan end\_at > start\_at; kolom wajib terisi.
-5. **Simpan**: kirim via Inertia POST ke route Laravel; backend membuat **event** lalu menyimpan **participants** dan/atau **event\_divisions**.
-6. **Feedback**: notifikasi sukses + refresh kalender (Inertia partial reload) ke range yang relevan.
+Seeder:
 
-### 4.2 Menampilkan Kalender Bulan (Month View)
+- `DatabaseSeeder.php`: Membuat user contoh + memanggil `DivisionSeeder` dan `EventSeeder`.
+- `DivisionSeeder.php`: Membuat divisi default: Seluruh Pegawai, Hakim, Kesekretariatan, Kepaniteraan, Dinas Luar.
+- `EventSeeder.php`: Generate ~20 event acak dalam bulan berjalan dan mengaitkan 1–2 divisi per event.
 
-* **Tujuan**: melihat semua kegiatan per tanggal.
-* **Data**: query range (awal‑akhir bulan yang sedang dilihat + buffer minggu sebelumnya/berikutnya).
-* **UI**: grid 7×(4‑6) minggu; setiap sel tanggal menampilkan chip kegiatan (maks 2‑3 + "+n" jika lebih).
-* **Interaksi**:
+Alur data inti:
 
-  * Klik tanggal ⇒ **Panel Samping/Modal** menampilkan "Daftar Kegiatan Hari Ini" (lihat 4.3).
-  * Hover/klik chip kegiatan ⇒ *tooltip* ringkas (judul, jam, divisi).
+- FE menentukan rentang berdasarkan view (day/week/month + buffer) dan memanggil `GET /api/events`.
+- BE mengambil event non-recurring yang overlap + mengekspansi recurring (weekly by `days` atau monthly by `month_days`, menghormati `interval` dan `recurrence_until`).
+- Hasil dikembalikan dalam format `EventResource` untuk dirender di grid bulan/timeline hari.
+- Pembuatan/pembaruan event menyinkronkan relasi `participantUsers` dan `divisions` via pivot.
 
-### 4.3 Detail per Tanggal (Daftar Kegiatan)
+—
 
-* **Tujuan**: melihat kegiatan pada tanggal tertentu, siapa & divisinya.
-* **Data**: filter event yang *overlap* dengan tanggal tsb (00:00‑23:59 atau all\_day=true).
-* **UI**: daftar kartu: judul, rentang jam, lokasi, badge divisi, avatar peserta.
-* **Aksi**: buka detail kegiatan (modal/route detail), edit, hapus (berdasarkan izin).
+## Frontend (Inertia + Vue)
 
-### 4.4 Timeline Jam (Day View)
+- Layout: `resources/views/app.blade.php` menyertakan CSRF token, Ziggy routes, dan Vite bundle.
+- Boot: `resources/js/app.js` membuat Inertia app, memuat halaman `resources/js/Pages/*`, Ziggy, dan Unhead.
+- Halaman Kalender: `resources/js/Pages/Calendar/Index.vue`
+  - State: `view`, `date`, `divisionOptions` dari controller; `events` dari `/api/events`.
+  - Fitur: tombol navigasi tanggal, filter divisi (checkbox), pencarian `q`, counter harian/mingguan/bulanan.
+  - Izin FE: `viewer` (lihat saja), `editor`/`admin` (buat/edit; delete untuk admin dan editor terhadap miliknya sesuai policy).
+  - API: memakai cookie Sanctum (`/sanctum/csrf-cookie`) + header `X-XSRF-TOKEN` saat request.
+- Komponen Kalender:
+  - `Components/Calendar/MonthView.vue`: grid bulan, event chips per hari, trigger buka form.
+  - `Components/Calendar/DayView.vue`: timeline 06:00–18:00 dengan penataan overlap.
+  - `Components/Calendar/SidebarDayList.vue`: daftar event per hari dengan aksi edit/hapus.
+  - `Components/Calendar/EventFormModal.vue`: form buat/ubah event, termasuk recurrence (weekly/monthly + interval + until), pilihan divisi, peserta (CSV ID saat ini).
+  - `Components/Calendar/{EventBlock,EventChip,DayCell}.vue`: elemen tampilan event.
+- Komponen UI umum: `resources/js/Components/ui/*` (button, input, select, modal, tabs, dsb.).
 
-* **Tujuan**: melihat plot kegiatan per jam.
-* **Data**: event pada tanggal terpilih; hitung posisi relatif terhadap jam (mis. 08:00‑17:00) + dukung all\_day di header.
-* **UI**: kolom jam di kiri; event digambar sebagai blok sepanjang durasi; overlapping ditata kolom fleksibel.
-* **Interaksi**: drag‑to‑create (opsional), drag‑to‑resize (opsional), klik blok untuk detail/edit.
+—
 
-### 4.5 Rekap Jumlah Kegiatan per Minggu & Bulan
+## Workflow Pengguna (end-to-end)
 
-* **Mingguan**: hitung jumlah event yang memiliki *overlap* dengan rentang Senin‑Minggu (atau sesuai locale).
-* **Bulanan**: hitung jumlah event yang *overlap* bulan berjalan.
-* **UI**: badge ringkas di header view; atau widget ringkasan ("Minggu ini: 12 kegiatan", "Bulan ini: 46").
+1) Otentikasi
 
-### 4.6 Filter Berdasarkan Divisi
+- Kunjungi `/` -> redirect ke halaman login. Login via email/password, magic link, atau OAuth (GitHub/GitLab jika aktif).
+- Setelah login, `/dashboard` -> redirect ke `/calendar`.
 
-* **Filter Panel**: radio/checkbox untuk memilih: Seluruh Pegawai, Hakim, Kesekretariatan, Kepaniteraan (bisa multi‑select jika diinginkan).
-* **Logika**:
+2) Mengelola Jadwal
 
-  * Jika kegiatan berisi **participants**: tampilkan jika **ada** peserta dari divisi terpilih.
-  * Jika kegiatan berisi **event\_divisions**: tampilkan jika ada **division\_id** yang terpilih.
-* **Interaksi**: perubahan filter memicu fetch ulang data kalender via Inertia (query param ?division=hakim, dsb).
+- Lihat kalender bulan; pilih tanggal untuk melihat daftar & timeline.
+- Filter berdasarkan Divisi dan/atau gunakan pencarian teks.
+- Tambah event (admin/editor): buka modal, isi detail, pilih divisi/peserta, opsional atur pengulangan (mingguan/bulanan), simpan -> data tersimpan beserta relasi.
+- Edit/Hapus event: admin bebas; editor terbatas pada event yang ia buat; viewer hanya melihat.
+- Event berulang diekspansi otomatis dalam rentang tampil, tampil seperti event biasa.
 
-### 4.7 Pencarian (opsional)
+3) Manajemen Pengguna & Profil
 
-* Kotak pencarian judul/ lokasi/ deskripsi.
-* Dikombinasikan dengan filter divisi & rentang tanggal yang sedang aktif.
+- Admin dapat mengelola user melalui API/halaman admin (role: viewer/editor/admin). Email `ADMIN_EMAIL` selalu admin.
+- Profil user dapat diperbarui (nama, email, nip, phone, foto) via Fortify action.
 
----
+4) Langganan (opsional)
 
-## 5) Arsitektur Frontend (Vue + Inertia)
+- `/subscriptions` menampilkan/mengelola status langganan Stripe bila `cashier.billing_enabled=true`.
 
-**Komponen Utama**
+—
 
-* `CalendarLayout` (shell + filter + header view switch)
-* `MonthView`, `WeekView`, `DayView`
-* `DayCell` (untuk MonthView), `EventChip`, `EventBlock`
-* `SidebarDayList` (daftar kegiatan tanggal terpilih)
-* `EventFormModal` (create/update)
+## Endpoint API (Ringkas)
 
-**Navigasi & State**
+- `GET /api/events?start&end&q&division[]`: daftar event dalam rentang.
+- `POST /api/events`: buat event.
+- `PUT /api/events/{id}`: perbarui event.
+- `DELETE /api/events/{id}`: hapus event.
+- `apiResource('user', ...)`: index/store/show/update/destroy (butuh token Sanctum + izin policy).
 
-* State ringan via props/emit atau Pinia (untuk filter & range tanggal aktif).
-* Perpindahan view (Bulan/Minggu/Hari) menjaga `currentDate` & `filters` di URL (Inertia remember state).
+—
 
-**Styling (Tailwind)**
+## Build & Pengembangan
 
-* Grid kalender, utilities untuk background/status, badge divisi (warna netral konsisten).
+- `composer dev`: jalankan php server, queue listener, pail log, dan Vite secara paralel.
+- `composer setup`: key:generate -> migrate:fresh --seed -> bun install/build -> scribe:generate.
+- Manual: `php artisan serve` + `npm run dev` (atau `bun run dev`).
 
----
+—
 
-## 6) Routing & Endpoint (Laravel)
+## Keamanan & Catatan
 
-**Web routes (Inertia pages)**
+- Pastikan semua route API kalender berada di balik `auth:sanctum` (saat ini sudah dibungkus group di `routes/api_calendar.php`).
+- FE menggunakan cookie Sanctum + header `X-XSRF-TOKEN` untuk request aman.
+- Perhatikan konsistensi timezone (server/DB vs browser) pada perhitungan rentang.
+- Peningkatan yang disarankan: autocomplete peserta, iCal export, drag-resize di UI, dan dukungan kalender mingguan penuh.
 
-* `GET /calendar` → halaman utama (default MonthView)
-* Query params: `view=month|week|day`, `date=YYYY-MM-DD`, `division=hakim|…`
+—
 
-**API (controller) contoh**
+## Referensi Berkas Penting (pilihan)
 
-* `GET /events` – daftar event untuk rentang tanggal & filter divisi
+- Konfigurasi inti: `composer.json`, `config/app.php`, `config/auth.php`, `config/sanctum.php`, `config/jetstream.php`.
+- Kalender: `routes/calendar.php`, `routes/api_calendar.php`, `app/Http/Controllers/{CalendarController,Api/EventController}.php`, `app/Http/Resources/EventResource.php`, `resources/js/Pages/Calendar/Index.vue`, `resources/js/Components/Calendar/*`.
+- Database: `database/migrations/2025_*`, `database/seeders/{DivisionSeeder,EventSeeder}.php`.
+- Auth/OAuth: `routes/web.php` (group auth), `app/Http/Controllers/User/*`, `config/oauth.php`.
+- Billing: `app/Http/Controllers/SubscriptionController.php`, `config/subscriptions.php`, `config/cashier.php`.
+- Dokumen bantuan: `docs/calendar_setup.md`.
 
-  * Params: `start`, `end`, `division[]`, `q`
-* `POST /events` – buat event
-* `PUT /events/{id}` – update event
-* `DELETE /events/{id}` – hapus event
-
-**Contoh Payload `POST /events`**
-
-```json
-{
-  "title": "Rapat Koordinasi",
-  "description": "Pembahasan perkara minggu berjalan",
-  "location": "Ruang Sidang 1",
-  "start_at": "2025-09-18T09:00:00",
-  "end_at": "2025-09-18T10:30:00",
-  "all_day": false,
-  "participant_user_ids": [12, 45, 71],
-  "division_ids": [2] // mis. 2=Hakim
-}
-```
-
----
-
-## 7) Logika Query (Eloquent) – Inti
-
-**Ambil event yang overlap rentang**
-
-```php
-Event::query()
-  ->when($start && $end, fn($q) => $q->where(function($w) use ($start, $end) {
-      $w->whereBetween('start_at', [$start, $end])
-        ->orWhereBetween('end_at', [$start, $end])
-        ->orWhere(function($ov) use ($start, $end) {
-          $ov->where('start_at', '<=', $start)
-             ->where('end_at', '>=', $end);
-        });
-  }))
-  ->with(['participants.user.division', 'divisions'])
-  ->get();
-```
-
-**Filter berdasarkan divisi**
-
-```php
-->when($divisionIds, function($q) use ($divisionIds) {
-  $q->where(function($w) use ($divisionIds) {
-    // event via participants
-    $w->whereHas('participants.user', fn($p) => $p->whereIn('division_id', $divisionIds))
-      // atau event ditandai langsung ke divisi
-      ->orWhereHas('divisions', fn($d) => $d->whereIn('division_id', $divisionIds));
-  });
-})
-```
-
-**Hitung jumlah kegiatan mingguan**
-
-```php
-$weeklyCount = Event::overlap($weekStart, $weekEnd)->count();
-```
-
-**Hitung jumlah kegiatan bulanan**
-
-```php
-$monthlyCount = Event::overlap($monthStart, $monthEnd)->count();
-```
-
-> *Tips:* Buat **scope** `overlap($start,$end)` di model Event untuk DRY.
-
----
-
-## 8) Flow UI (Skenario Interaksi)
-
-**A. Melihat beban jadwal satu bulan**
-
-1. User buka `/calendar?view=month&date=2025-09-01`.
-2. Aplikasi fetch `/events?start=2025-08-25&end=2025-10-05&division[]=all`.
-3. Grid bulan tampil; setiap tanggal menampilkan ringkas kegiatan.
-4. User set filter `division=Hakim` ⇒ reload data hanya kegiatan Hakim.
-
-**B. Fokus ke hari tertentu & timeline**
-
-1. User klik 2025‑09‑18.
-2. Panel kanan memuat daftar kegiatan hari itu + tombol "Lihat Timeline".
-3. Klik ⇒ ganti ke `view=day` dengan timeline jam; blok‑blok event tergambar proporsional.
-
-**C. Membuat kegiatan baru**
-
-1. User klik `+` di 2025‑09‑18 pukul 09:00 (drag‑to‑create).
-2. Modal form muncul; user melengkapi data & peserta/divisi.
-3. Submit ⇒ notifikasi sukses; kalender di-refresh.
-
----
-
-## 9) Pertimbangan UX & Kinerja
-
-* **Virtualization** untuk banyak event (month view) agar tetap responsif.
-* **Partial reload Inertia**: hanya refetch `/events` saat filter/ tanggal berubah.
-* **Debounce** pencarian.
-* **Aksesibilitas**: navigasi keyboard, kontrast warna Tailwind, ARIA pada modal.
-* **Timezone**: simpan UTC di DB, tampilkan sesuai locale.
-
----
-
-## 10) Validasi & Edge Cases
-
-* Event all‑day yang menyeberang beberapa hari tetap muncul di setiap hari terkait.
-* Event lintas hari (mulai malam, selesai pagi) harus tampil di dua tanggal (month) dan dua segmen (day view).
-* Bentrok jadwal: tandai overlap (warna/border khusus) atau per kolom.
-* Hak akses: hanya pembuat/ admin yang dapat edit/hapus.
-
----
-
-## 11) Roadmap (Opsional)
-
-* Repeating events (RRULE sederhana: harian/mingguan/bulanan).
-* Notifikasi (email/telegram) minus‑1 jam/ hari.
-* Impor/ekspor iCal.
-* Integrasi SSO & audit log perubahan event.
-
----
-
-## 12) Ringkasan Manfaat
-
-* Satu sumber kebenaran jadwal organisasi.
-* Transparansi keterlibatan orang & divisi.
-* Pengambilan keputusan lebih cepat lewat rekap mingguan/bulanan & filter divisi.
