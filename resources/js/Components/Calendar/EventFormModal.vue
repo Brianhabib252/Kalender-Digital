@@ -121,7 +121,7 @@ async function submit() {
     return
   }
   saving.value = false
-  emit('saved')
+  emit('saved', isEdit.value ? 'updated' : 'created')
 }
 
 const deleting = ref(false)
@@ -178,7 +178,7 @@ async function doDelete() {
     return
   }
   deleting.value = false
-  emit('saved')
+  emit('saved', isEdit.value ? 'updated' : 'created')
 }
 </script>
 

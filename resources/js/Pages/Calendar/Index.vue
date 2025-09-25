@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watchEffect } from 'vue'
+import { ref, computed, watchEffect, onBeforeUnmount } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import MonthView from '../../Components/Calendar/MonthView.vue'
 import DayView from '../../Components/Calendar/DayView.vue'
@@ -7,6 +7,7 @@ import SidebarDayList from '../../Components/Calendar/SidebarDayList.vue'
 import EventFormModal from '../../Components/Calendar/EventFormModal.vue'
 import LoadingOverlay from '../../Components/UI/LoadingOverlay.vue'
 import ProfileSettingsModal from '../../Components/Profile/ProfileSettingsModal.vue'
+import SuccessPopup from '../../Components/UI/SuccessPopup.vue'
 
 const props = defineProps({
   today: String,
@@ -51,6 +52,13 @@ const events = ref([])
 const loading = ref(false)
 const showForm = ref(false)
 const editingEvent = ref(null)
+const showSuccess = ref(false)
+const successMessage = ref('')
+let successTimer = null
+
+onBeforeUnmount(() => {
+  clearTimeout(successTimer)
+})
 
 function startOfWeek(date) {
   const d = new Date(date)
@@ -222,7 +230,26 @@ function openEdit(evt) {
   showForm.value = true
 }
 
-function onSaved() { showForm.value = false; fetchEvents() }
+function triggerSuccess(message) {
+  successMessage.value = message
+  showSuccess.value = true
+  clearTimeout(successTimer)
+  successTimer = setTimeout(() => {
+    showSuccess.value = false
+  }, 2000)
+}
+
+function onSaved(kind = 'saved') {
+  showForm.value = false
+  fetchEvents()
+  if (kind === 'created') {
+    triggerSuccess('Kegiatan berhasil dibuat')
+  } else if (kind === 'updated') {
+    triggerSuccess('Kegiatan berhasil diperbarui')
+  } else {
+    triggerSuccess('Perubahan berhasil disimpan')
+  }
+}
 
 async function onDelete(evt) {
   if (!canDelete.value) return
@@ -249,6 +276,7 @@ async function onDelete(evt) {
     return
   }
   fetchEvents()
+  triggerSuccess('Kegiatan berhasil dihapus')
 }
 </script>
 
@@ -416,6 +444,8 @@ async function onDelete(evt) {
         @close="closeProfileModal"
       />
 
+      <SuccessPopup :visible="showSuccess" :message="successMessage" />
+
       <EventFormModal
         v-if="showForm"
         :date="selectedDay || currentDate"
@@ -432,9 +462,3 @@ async function onDelete(evt) {
 
 <style scoped>
 </style>
-
-
-
-
-
-
