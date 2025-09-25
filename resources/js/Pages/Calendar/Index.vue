@@ -239,6 +239,10 @@ async function onDelete(evt) {
     },
   })
   if (!res.ok) {
+    if ([401, 403, 419].includes(res.status)) {
+      alert('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
+      return
+    }
     try {
       const data = await res.json(); alert(data?.message || 'Gagal menghapus kegiatan')
     } catch (e) { const t = await res.text(); alert(t || 'Gagal menghapus kegiatan') }

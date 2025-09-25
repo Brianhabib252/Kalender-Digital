@@ -104,6 +104,11 @@ async function submit() {
     body: JSON.stringify(payload),
   })
   if (!res.ok) {
+    if ([401, 403, 419].includes(res.status)) {
+      alert('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
+      saving.value = false
+      return
+    }
     try {
       const data = await res.json()
       const errs = data?.errors ? Object.values(data.errors).flat().join('\n') : (data?.message || 'Gagal menyimpan kegiatan')
@@ -157,6 +162,11 @@ async function doDelete() {
     },
   })
   if (!res.ok) {
+    if ([401, 403, 419].includes(res.status)) {
+      alert('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
+      deleting.value = false
+      return
+    }
     try {
       const data = await res.json()
       alert(data?.message || 'Gagal menghapus kegiatan')
