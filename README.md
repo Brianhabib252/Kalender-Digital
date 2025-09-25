@@ -1,44 +1,81 @@
-﻿# Kalender Digital
+# Kalender Digital
 
-A modern, role-based digital calendar for teams powered by Laravel 12, Inertia (Vue 3), and TailwindCSS. It includes authentication, division-based filtering, recurring events, and admin tools for managing users and auditing changes.
+Kalender Digital adalah aplikasi kalender kolaboratif untuk instansi/organisasi yang dibangun di atas Laravel 12, Inertia.js, dan Vue 3. Proyek ini menghadirkan tampilan bulan, hari, dan timeline, lengkap dengan peran pengguna, audit log, dan integrasi Stripe, sehingga siap dipakai di lingkungan produksi.
+
+## Overview
+- Role-based access (admin/editor/viewer) dengan Jetstream, Fortify, dan Sanctum.
+- Tampilan kalender rich UI menggunakan Vue 3 + TailwindCSS, filter divisi, dan pencarian.
+- API JSON untuk manajemen event, lengkap dengan dukungan rekuren mingguan/bulanan.
+- Admin panel Inertia untuk pengelolaan user, audit log user/event, dan integrasi Filament opsional.
+- Magic link login, OAuth (GitHub/GitLab), dan langganan Stripe (Cashier) sebagai fitur tambahan.
 
 ## Stack
+- **Backend**: Laravel 12 (PHP 8.3+), Sanctum, Jetstream Teams, Fortify, Cashier, Socialite, Scribe.
+- **Frontend**: Inertia.js + Vue 3 + Vite, Ziggy, Tailwind CSS.
+- **Tooling**: PHPUnit/Pest, Pint, Rector, PHPStan, Telescope, Octane, Pail, Sentry.
 
-- Backend: Laravel 12 (PHP 8.3+)
-- SPA: Inertia.js + Vue 3 + Vite
-- UI: Tailwind CSS
-- Auth: Jetstream + Fortify + Sanctum; optional OAuth (GitHub/GitLab)
-- Teams/Roles: Jetstream Teams; custom roles (admin, editor, viewer)
-- Billing (optional): Stripe via Laravel Cashier
-- API docs (optional): Scribe
+## Application Structure
+- `routes/web.php`, `routes/calendar.php`, `routes/api.php`, `routes/api_calendar.php`: HTTP endpoint untuk UI, kalender, API user, dan API event.
+- `app/Http/Controllers`: Calendar CRUD, admin panel, subscription, chat, login sosial, magic link.
+- `app/Http/Requests`, `app/Policies`, `app/Http/Middleware`: Validasi, kebijakan role, dan proteksi admin.
+- `app/Models`: Event, Division, User, pivot relasi, audit log.
+- `resources/js`: Inertia SPA, halaman Calendar/Admin/Profile, komponen UI/Calendar, bootstrap Ziggy.
+- `database/migrations`, `database/seeders`: Skema dan seeder divisi/event/log.
+- `docs/`, `tests/`: Dokumentasi konfigurasi dan suite Pest untuk auth, policy, controller.
 
-## Requirements
+## Backend Flow
+- `CalendarController` memastikan divisi dasar tersedia dan mengirim data awal kalender.
+- `Api\EventController` menangani pencarian event, ekspansi rekuren, dan pencatatan log perubahan.
+- `ApiUserController` menggunakan Fortify actions untuk CRUD user via Sanctum.
+- `Admin\{UserManagement,UserLog,EventLog}Controller` melayani halaman admin serta endpoint JSON audit trail.
+- Middleware `EnsureUserIsAdmin` dan policy `EventPolicy`/`UserPolicy` mengatur hak akses admin/editor/viewer.
 
-- PHP 8.3+
-- Composer
-- Node 18+ (or Bun)
-- MySQL 8+
+## Frontend Flow
+- `resources/js/app.js` mem-bootstrap Inertia, Ziggy, dan komponen global.
+- Halaman `Calendar/Index.vue` mengelola state (view/day/week), memanggil `/api/events`, dan merender grid + timeline.
+- Komponen kalender (`MonthView`, `DayView`, `SidebarDayList`, `EventFormModal`) menangani interaksi drag-free, filter divisi, serta form rekuren.
+- `Admin/Users/Index.vue` menyediakan tabel edit user, pemanggilan log harian, dan tombol kembali ke kalender.
+- Halaman Jetstream lainnya (Profile, Teams, Subscriptions, Chat) mempertahankan gaya dan integrasi aplikasi.
+
+## Database Schema & Seeds
+- `events`, `event_participants`, `event_divisions` menyimpan kegiatan, peserta, dan divisi terhubung.
+- Kolom rekuren (`recurrence_type`, `recurrence_rule`, `recurrence_until`) menambah dukungan weekly/monthly.
+- `user_change_logs` dan `event_change_logs` merekam perubahan (field lama -> baru) beserta aktor.
+- `DivisionSeeder`, `EventSeeder` mengisi divisi default dan contoh jadwal; `DatabaseSeeder` membuat pengguna awal.
+
+## User Workflow
+1. Pengguna login (password, magic link, atau OAuth). Sanctum menyetup sesi.
+2. `/dashboard` mengarahkan ke `/calendar` yang memuat data awal via Inertia.
+3. Vue memanggil `/api/events` sesuai rentang tampilan, menerapkan filter divisi & pencarian.
+4. Admin/editor membuat, mengubah, atau menghapus event melalui modal; perubahan dicatat di log.
+5. Admin membuka `/admin/users` untuk memperbarui data user, melihat audit log user & kalender, lalu kembali ke kalender.
+6. Pengguna dapat memperbarui profil, mengelola tim, mengakses langganan Stripe, dan memakai halaman chat AI.
+
+## API Endpoints
+- `GET /api/events?start&end&q&division[]`: Event dalam rentang dengan filter teks/divisi.
+- `POST /api/events`: Buat event baru (divisi + peserta + rekuren).
+- `PUT /api/events/{id}`: Perbarui event.
+- `DELETE /api/events/{id}`: Hapus event + catat log.
+- `apiResource('user', ApiUserController)`: CRUD user berdasarkan policy dan token Sanctum.
 
 ## Quick Start (Local)
 
-1) Clone and install
+1) Clone dan install
 
 ```bash
 git clone https://github.com/Brianhabib252/Kalender-Digital.git
 cd Kalender-Digital
 composer install
-npm install # or: bun install
+npm install # atau: bun install
 ```
 
-2) Configure environment
-
-Copy env file and set your database credentials:
+2) Konfigurasi environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` (minimum):
+Atur `.env` minimal:
 
 ```
 APP_URL=http://127.0.0.1:8000
@@ -53,79 +90,30 @@ DB_USERNAME=your_user
 DB_PASSWORD=your_pass
 ```
 
-3) Generate key, migrate, and seed
+3) Generate key, migrate, dan seed
 
 ```bash
 php artisan key:generate
 php artisan migrate --force
-# Optional: seed default divisions and example events
+# Opsional: isi divisi & contoh event
 php artisan db:seed --class=Database\Seeders\DivisionSeeder
 php artisan db:seed --class=Database\Seeders\EventSeeder
 ```
 
-4) Run the app (two terminals)
+4) Jalankan aplikasi (dua terminal)
 
 ```bash
 php artisan serve
-npm run dev # or: bun run dev
+npm run dev # atau: bun run dev
 ```
 
-Open the calendar at: `http://127.0.0.1:8000/calendar`
+Buka `http://127.0.0.1:8000/calendar`.
 
-## Screenshots
-
-These should reflect the current digital calendar UI. Add your captures to `public/images/` and adjust paths if needed.
-
-- Calendar (Month): `public/images/calendar-month.png`
-  - ![Calendar Month](public/images/calendar-month.png)
-- Calendar (Day Timeline): `public/images/calendar-day.png`
-  - ![Calendar Day](public/images/calendar-day.png)
-- Admin – Perubahan Pengguna & Perubahan Kalender: `public/images/admin-users.png`
-  - ![Admin Users](public/images/admin-users.png)
-
-> Tip: You can add your own animated GIF demo by placing a file at `public/images/getting-started.gif` and linking it here.
-
-## Features
-
-- Calendar views
-  - Month view with division chips and quick create
-  - Day timeline (06:00–18:00) with overlap layout
-  - Division filter and text search (title/location/description)
-- Events
-  - Create/Update/Delete with title, description, location
-  - Divisions and participants (IDs; can be extended to autocomplete)
-  - Recurrence: weekly (days + interval) and monthly (date + interval)
-  - "Sepanjang hari" sets activity to 07:30–16:00 (workday hours)
-- Roles
-  - Viewer: read-only
-  - Editor: can create and manage events they created
-  - Admin: full access and can change roles for other users
-- Admin tools
-  - User management page (`/admin/users`): edit Name/Email/NIP/Phone/Role
-  - Audit logs: date-filtered "Perubahan Pengguna" and "Perubahan Kalender"
-  - Navigation button back to the calendar
-
-## How To Use
-
-- Login (Jetstream) and go to `/calendar`.
-- Use "Pilih tanggal", navigation buttons, or chips to filter by division.
-- Click "+ Buat" on a day or in the day timeline to add an activity.
-- Admins can open profile pop-out → "Manajemen Pengguna", or go to `/admin/users` directly.
-  - Change roles (viewer/editor/admin) and update user info, then "Simpan".
-  - Use the date pickers at the top of each logs section to review changes for a specific day.
-
-## API (Calendar)
-
-- Auth: Sanctum cookie (front-end calls fetch `/sanctum/csrf-cookie` first)
-- Endpoints (prefixed by `/api`):
-  - `GET /api/events?start=ISO&end=ISO&q=string&division[]=ID`
-  - `POST /api/events` (JSON body)
-  - `PUT /api/events/{id}` (JSON body)
-  - `DELETE /api/events/{id}`
-
-Notes
-- Filtering by `division[]` matches events linked to those divisions or with participants in those divisions.
-- Recurring events are expanded for the requested date range (weekly/monthly, with interval and until).
+## Development & Tooling
+- `composer dev`: Server Laravel, queue listener, Pail log, dan Vite berjalan paralel.
+- `composer setup`: Reset database (migrate:fresh --seed), build aset Bun, generate Scribe docs.
+- `composer analyse|format|test`: PHPStan, Pint+Rector, dan suite Pest.
+- `npm run build` / `bun run build`: Build aset produksi.
 
 ## Testing
 
@@ -133,21 +121,22 @@ Notes
 composer test
 ```
 
-At the time of writing: 110 passed, 3 skipped (286 assertions).
+Saat ini: 110 lewat, 3 dilewati (286 assertions).
 
 ## Production Notes
-
-- Build assets: `npm run build` (or `bun run build`)
-- Configure `APP_URL`, `SESSION_DOMAIN`, and cookies (Sanctum) correctly for your domain.
-- Optional services: Stripe (Cashier), Sentry, Octane/Telescope
+- Pastikan `APP_URL`, cookie Sanctum, dan `SESSION_DOMAIN` disetel sesuai domain produksi.
+- Jalankan migrasi untuk `user_change_logs` dan `event_change_logs` agar audit trail berfungsi.
+- Aktifkan Stripe, Sentry, Octane, dan Telescope sesuai kebutuhan.
 
 ## Troubleshooting
+- Filter divisi tidak jalan: pastikan berada di branch terbaru; UI akan refetch saat chip berubah.
+- Jam `Sepanjang hari` mengikuti jam kerja (07:30-16:00); ubah di UI lalu simpan ulang untuk event lama.
+- Log kosong: cek bahwa migrasi log sudah dijalankan dan user bernilai admin.
 
-- Division filter does not apply: ensure you are on the latest main; the calendar re-fetches when division chips change.
-- "Sepanjang hari" spans full day: fixed to use 07:30–16:00; edit and re-save existing events if needed.
-- Logs not recording: run migrations for `user_change_logs` and `event_change_logs`.
+## Documentation
+- Dokumentasi API: `php artisan scribe:generate` -> `public/docs/index.html`.
+- Panduan setup internal: `docs/calendar_setup.md`.
 
 ## License
 
 MIT
-

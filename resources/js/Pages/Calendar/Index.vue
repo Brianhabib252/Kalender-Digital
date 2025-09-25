@@ -5,9 +5,11 @@ import MonthView from '../../Components/Calendar/MonthView.vue'
 import DayView from '../../Components/Calendar/DayView.vue'
 import SidebarDayList from '../../Components/Calendar/SidebarDayList.vue'
 import EventFormModal from '../../Components/Calendar/EventFormModal.vue'
-import LoadingOverlay from '../../Components/UI/LoadingOverlay.vue'
+import LoadingOverlay from '../../Components/ui/LoadingOverlay.vue'
 import ProfileSettingsModal from '../../Components/Profile/ProfileSettingsModal.vue'
-import SuccessPopup from '../../Components/UI/SuccessPopup.vue'
+import SuccessPopup from '../../Components/ui/SuccessPopup.vue'
+import ErrorPopup from '../../Components/ui/ErrorPopup.vue'
+import ConfirmPopup from '../../Components/ui/ConfirmPopup.vue'
 
 const props = defineProps({
   today: String,
@@ -55,9 +57,18 @@ const editingEvent = ref(null)
 const showSuccess = ref(false)
 const successMessage = ref('')
 let successTimer = null
+const showError = ref(false)
+const errorMessage = ref('')
+let errorTimer = null
+const showDeleteConfirm = ref(false)
+const deleteConfirmTitle = ref('')
+const deleteConfirmMessage = ref('')
+const pendingDeleteEvent = ref(null)
+const deleteLoading = ref(false)
 
 onBeforeUnmount(() => {
   clearTimeout(successTimer)
+  clearTimeout(errorTimer)
 })
 
 function startOfWeek(date) {
@@ -239,6 +250,42 @@ function triggerSuccess(message) {
   }, 2000)
 }
 
+function triggerError(message) {
+  errorMessage.value = message || 'Terjadi kesalahan'
+  showError.value = true
+  clearTimeout(errorTimer)
+  errorTimer = setTimeout(() => {
+    showError.value = false
+  }, 2500)
+}
+
+async function toErrorMessage(response, fallback = 'Terjadi kesalahan') {
+  if (!response) return fallback
+  try {
+    const data = await response.clone().json()
+    if (data?.errors) {
+      const merged = Object.values(data.errors).flat().filter(Boolean)
+      if (merged.length) return merged.join('\n')
+    }
+    if (typeof data?.message === 'string' && data.message.trim()) {
+      return data.message
+    }
+  } catch {
+    // ignore JSON parsing issues, fall back to text handling
+  }
+  try {
+    const text = await response.text()
+    if (text) return text
+  } catch {
+    // ignore text parsing issues, use fallback
+  }
+  return fallback
+}
+
+function onFailed(message) {
+  triggerError(message || 'Terjadi kesalahan')
+}
+
 function onSaved(kind = 'saved') {
   showForm.value = false
   fetchEvents()
@@ -246,37 +293,75 @@ function onSaved(kind = 'saved') {
     triggerSuccess('Kegiatan berhasil dibuat')
   } else if (kind === 'updated') {
     triggerSuccess('Kegiatan berhasil diperbarui')
+  } else if (kind === 'deleted') {
+    triggerSuccess('Kegiatan berhasil dihapus')
   } else {
     triggerSuccess('Perubahan berhasil disimpan')
   }
 }
 
+function onDeleted() {
+  onSaved('deleted')
+}
+
 async function onDelete(evt) {
   if (!canDelete.value) return
   if (!evt?.id) return
-  if (!confirm('Hapus kegiatan ini?')) return
-  await ensureSanctumCookie()
-  const res = await fetch(`/api/events/${evt.id}`, {
-    method: 'DELETE',
-    credentials: 'same-origin',
-    headers: {
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
-    },
-  })
-  if (!res.ok) {
-    if ([401, 403, 419].includes(res.status)) {
-      alert('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
-      return
-    }
-    try {
-      const data = await res.json(); alert(data?.message || 'Gagal menghapus kegiatan')
-    } catch (e) { const t = await res.text(); alert(t || 'Gagal menghapus kegiatan') }
-    return
+  pendingDeleteEvent.value = evt
+  deleteConfirmTitle.value = 'Hapus kegiatan ini?'
+  deleteConfirmMessage.value = evt?.title
+    ? `Kegiatan "${evt.title}" akan dihapus dari kalender.`
+    : 'Kegiatan akan dihapus dari kalender dan tidak dapat dikembalikan.'
+  showDeleteConfirm.value = true
+}
+
+function cancelDelete() {
+  if (deleteLoading.value) return
+  showDeleteConfirm.value = false
+  pendingDeleteEvent.value = null
+}
+
+async function confirmDelete() {
+  if (!pendingDeleteEvent.value || deleteLoading.value) return
+  deleteLoading.value = true
+  const target = pendingDeleteEvent.value
+  try {
+    await performDelete(target)
+  } finally {
+    deleteLoading.value = false
+    showDeleteConfirm.value = false
+    pendingDeleteEvent.value = null
   }
-  fetchEvents()
-  triggerSuccess('Kegiatan berhasil dihapus')
+}
+
+async function performDelete(evt) {
+  try {
+    await ensureSanctumCookie()
+    const res = await fetch(`/api/events/${evt.id}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
+      },
+    })
+    if (!res.ok) {
+      if ([401, 403, 419].includes(res.status)) {
+        triggerError('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
+        return false
+      }
+      const message = await toErrorMessage(res, 'Gagal menghapus kegiatan')
+      triggerError(message)
+      return false
+    }
+    fetchEvents()
+    triggerSuccess('Kegiatan berhasil dihapus')
+    return true
+  } catch {
+    triggerError('Tidak dapat terhubung ke server. Coba lagi nanti.')
+    return false
+  }
 }
 </script>
 
@@ -445,6 +530,17 @@ async function onDelete(evt) {
       />
 
       <SuccessPopup :visible="showSuccess" :message="successMessage" />
+      <ErrorPopup :visible="showError" :message="errorMessage" />
+      <ConfirmPopup
+        :visible="showDeleteConfirm"
+        :title="deleteConfirmTitle"
+        :message="deleteConfirmMessage"
+        confirm-text="Hapus"
+        cancel-text="Batal"
+        :loading="deleteLoading"
+        @cancel="cancelDelete"
+        @confirm="confirmDelete"
+      />
 
       <EventFormModal
         v-if="showForm"
@@ -455,6 +551,8 @@ async function onDelete(evt) {
         :can-delete="canDelete"
         @close="showForm=false"
         @saved="onSaved"
+        @failed="onFailed"
+        @deleted="onDeleted"
       />
     </div>
   </section>

@@ -1,226 +1,140 @@
 # Ringkasan Proyek: Kalender Digital (Laravel 12 + Inertia + Vue 3)
 
-Dokumen ini merangkum framework, peran berkas penting, alur database, endpoint, dan workflow aplikasi Kalender Digital dalam repositori ini.
+## Gambaran Umum
+- Kalender Digital adalah aplikasi kalender tim berbasis Laravel 12 yang menyediakan tampilan bulan, hari, dan timeline untuk mengelola kegiatan kantor secara kolaboratif.
+- Aplikasi ini memadukan Jetstream (Fortify + Sanctum) untuk otentikasi, Inertia.js + Vue 3 untuk SPA, serta TailwindCSS untuk antarmuka responsif.
+- Peran pengguna (admin, editor, viewer) mengatur hak akses. Admin mengelola pengguna, editor mengelola kegiatan yang dibuatnya, dan viewer hanya melihat.
+- Pencatatan perubahan (user dan event) serta integrasi Stripe, Scribe, dan Filament menjadikan aplikasi siap produksi dengan audit trail dan admin panel opsional.
 
-—
+## Stack & Integrasi Utama
+- Backend: Laravel 12, PHP 8.3 (`composer.json`, `artisan`).
+- Frontend: Inertia.js, Vue 3, Vite, Ziggy (`resources/js/app.js`, `vite.config.ts`).
+- UI: Tailwind CSS + komponen kustom (`resources/css/app.css`, `resources/js/Components`).
+- Auth & Teams: Jetstream, Fortify, Sanctum, Socialite, magic link (`app/Actions`, `app/Http/Controllers/User`).
+- Kalender: API JSON berbasis Sanctum + komponen Vue khusus kalender (`routes/api_calendar.php`, `resources/js/Components/Calendar`).
+- Billing opsional: Laravel Cashier + Stripe (`config/cashier.php`, `app/Http/Controllers/SubscriptionController.php`).
+- Observability & tooling: Sentry, Telescope, Octane, Pail, Rector, Pint, PHPStan, Scribe.
 
-## Stack & Framework
+## Struktur Direktori & Fungsi Berkas
+### Routing
+- `routes/web.php`: Route web terproteksi Sanctum/Jetstream (dashboard, chat, subscriptions, admin) + bootstrap auth (OAuth, magic link).
+- `routes/calendar.php`: Halaman kalender utama via Inertia (`/calendar`).
+- `routes/api.php`: API `apiResource` user (Sanctum) dan import kalender.
+- `routes/api_calendar.php`: Endpoint CRUD event (`GET/POST/PUT/DELETE /api/events`).
+- `routes/console.php`: Definisi artisan command kustom (Sitemap).
 
-- Backend: Laravel 12 (`artisan`, `composer.json`)
-- SPA: Inertia.js + Vue 3 + Vite (`resources/js/app.js`, `vite.config.ts`, `package.json`)
-- UI: Tailwind CSS (`postcss.config.js`, `resources/css/app.css`)
-- Auth: Jetstream + Fortify + Sanctum; Social login via Socialite
-- Teams: Jetstream Teams
-- Billing: Stripe via Laravel Cashier (`config/cashier.php`, `config/subscriptions.php`)
-- Admin: Filament 3 (panel tersedia)
-- API Docs: Scribe (`config/scribe.php`, `resources/views/scribe/index.blade.php`)
-- Observability/Perf: Sentry, Telescope, Octane
-- FE routing helper: Ziggy
+### Controller HTTP
+- `app/Http/Controllers/CalendarController.php`: Render halaman kalender, seed divisi default, kirim tanggal & opsi divisi.
+- `app/Http/Controllers/Api/EventController.php`: CRUD event, ekspansi event rekuren (weekly/monthly), filter teks & divisi, logging perubahan.
+- `app/Http/Controllers/ApiUserController.php`: API user (list, buat, update, hapus) memanfaatkan Fortify actions & policy.
+- `app/Http/Controllers/Admin/{UserManagement,UserLog,EventLog}Controller.php`: Halaman admin Inertia + endpoint JSON log audit user/event.
+- `app/Http/Controllers/User/{OauthController,LoginLinkController}.php`: Login sosial dan tautan sekali pakai.
+- `app/Http/Controllers/{Dashboard,Chat,Subscription,Welcome}Controller.php`: Dashboard redirect, chat AI, manajemen langganan, halaman sambutan.
 
-—
+### Request Validation & Middleware
+- `app/Http/Requests/StoreEventRequest.php` & `UpdateEventRequest.php`: Validasi kegiatan termasuk aturan rekuren dan hubungan divisi/peserta.
+- `app/Http/Requests/Admin/UpdateManagedUserRequest.php`: Validasi update user oleh admin (nama, email, NIP, telepon, role, password opsional).
+- `app/Http/Middleware/EnsureUserIsAdmin.php`: Middleware menjaga route admin.
+- `app/Http/Middleware/HandleInertiaRequests.php`: Menyuntikkan data global Inertia (auth, flash message, Ziggy).
 
-## Struktur Proyek (Tingkat Tinggi)
+### Model & Relasi
+- `app/Models/Event.php`: Model kegiatan, relasi ke `User` (creator), `Division`, `participantUsers`, scope `overlap` untuk rentang tanggal.
+- `app/Models/Division.php`: Divisi organisasi, relasi ke pengguna & event.
+- `app/Models/{EventParticipant,EventDivision}`: Pivot untuk partisipan & relasi divisi pada event.
+- `app/Models/{User,LoginLink,OauthConnection,Membership,Team,TeamInvitation}`: Model Jetstream/Cashier dengan tambahan kolom `nip` & `phone`, role-based helper.
+- `app/Models/{UserChangeLog,EventChangeLog}`: Audit trail yang menyimpan perubahan field dalam format array.
 
-- `routes/web.php`: Route web (auth, dashboard, chat, subscriptions) + include `calendar.php`.
-- `routes/calendar.php`: Halaman kalender (Inertia) di `/calendar`.
-- `routes/api.php`: API dasar + include `api_calendar.php`.
-- `routes/api_calendar.php`: Endpoint CRUD event (`/api/events`).
-- `app/Http/Controllers/*`: Controller web & API (lihat ringkas di bawah).
-- `app/Http/Requests/*`: Validasi request Event (store/update) dan admin user.
-- `app/Models/*`: Model Eloquent (Event, Division, User, dst.).
-- `app/Policies/*`: Kebijakan akses (EventPolicy, UserPolicy, dst.).
-- `database/migrations/*`: Skema database (users, divisions, events, pivot, recurrence, dst.).
-- `database/seeders/*`: Seeder Divisi dan contoh Event.
-- `resources/js/Pages/*`: Halaman Inertia (Calendar, Auth, Profile, Teams, Subscriptions, Chat, Welcome).
-- `resources/js/Components/*`: Komponen Vue (kalender dan UI primitives).
-- `resources/views/*`: Blade dasar (`app.blade.php`) dan view email/prompt/docs.
+### Resources, Notifications, Jobs, Actions
+- `app/Http/Resources/EventResource.php`: Serialisasi event ke JSON (divisi & peserta ter-embed).
+- `app/Notifications/LoginLinkMail.php`: Email untuk magic login link.
+- `app/Jobs/User/UpdateUserProfileInformationJob.php`: Menyinkronkan profil ke Stripe (dipicu oleh update profile action).
+- `app/Actions/Fortify/*` & `app/Actions/Jetstream/*`: Implementasi login/register/teams default Jetstream.
+- `app/Actions/User/*`: Aktivasi provider OAuth dan callback handler.
+- `app/Console/Commands/GenerateSitemap.php`: Command membuat sitemap.
 
-—
+### Providers & Filament
+- `app/Providers/{App,Fortify,Jetstream,Telescope}ServiceProvider.php`: Registrasi service, policy, Fortify view, fitur Jetstream, Telescope.
+- `app/Providers/Filament/AdminPanelProvider.php` & `app/Filament/Resources/UserResource.php`: Panel admin Filament untuk CRUD user jika diaktifkan.
 
-## Routing & Endpoint Utama
+### Frontend (Inertia + Vue)
+- `resources/js/app.js`: Bootstraps Inertia app, Ziggy, Unhead, register komponen Vue.
+- `resources/js/bootstrap.js`: Setup axios, CSRF header, Echo placeholder.
+- `resources/js/Pages/Calendar/Index.vue`: Halaman kalender utama; mengelola state view/day/week/month, filter divisi, pencarian, sinkronisasi data API, izin berdasarkan role.
+- `resources/js/Components/Calendar/*`: Grid bulan (`MonthView`), timeline harian (`DayView`), daftar harian (`SidebarDayList`), form modal (`EventFormModal`), chips/blok event.
+- `resources/js/Pages/Admin/Users/Index.vue`: Panel admin untuk edit pengguna + viewer log perubahan user/event.
+- `resources/js/Pages/Profile/*`, `Teams/*`, `Subscriptions/*`, `Chat/*`: Halaman Jetstream standar yang sudah di-styling ulang.
+- `resources/js/Components/UI/*`: Koleksi komponen UI generik (modal, tombol, input, tab) berbasis Tailwind.
+- `resources/js/Components/Profile/*`: Modal profil cepat & pengaturan profil.
 
-Web routes (`routes/web.php`):
+### Views & Assets
+- `resources/views/app.blade.php`: Shell Inertia dengan meta tags, Ziggy, dan Vite bundle.
+- `resources/views/emails/team-invitation.blade.php`: Template undangan tim.
+- `resources/views/scribe/index.blade.php`: Halaman dokumentasi API Scribe.
+- `resources/css/app.css`: Import Tailwind + gaya tambahan.
+- `public/images/*`: Screenshot/grafik untuk README.
 
-- `/`: Redirect ke `login`.
-- `/dashboard`: Redirect ke kalender (`DashboardController`).
-- `/calendar`: Halaman kalender (middleware `auth:sanctum`, Jetstream auth session; lihat `routes/calendar.php`).
-- `auth/*`: OAuth redirect/callback dan magic link (rate-limited + signed URL).
-- `/chat`: Chat (opsional; integrasi Prism, akses setelah login).
-- `/subscriptions`: Manajemen langganan (Cashier) — `index/create/show`.
+### Database Migrations & Seeder
+- Migrations Jetstream/Cashier dasar (`0001_*`).
+- `2025_01_01_000000_create_divisions_table.php`: Tabel divisi.
+- `2025_01_01_000100_add_division_id_to_users_table.php`: Relasi user -> division.
+- `2025_01_01_000200_create_events_table.php`: Tabel event dengan waktu mulai/akhir dan metadata.
+- `2025_01_01_000300_create_event_participants_table.php` & `000400_create_event_divisions_table.php`: Pivot partisipan & divisi.
+- `2025_01_01_000450_add_recurrence_to_events_table.php`: Kolom rekuren (`recurrence_type`, `recurrence_rule`, `recurrence_until`).
+- `2025_09_20_000001_add_nip_and_phone_to_users_table.php`: Kolom NIP & telepon.
+- `2025_09_20_010000_add_role_to_users_table.php`: Kolom role + default.
+- `2025_09_20_020000_create_user_change_logs_table.php` & `020100_create_event_change_logs_table.php`: Audit trail.
+- Seeder: `DivisionSeeder` (divisi default), `EventSeeder` (contoh kegiatan), `DatabaseSeeder` (user contoh + memanggil seeder lain).
 
-API routes (`routes/api.php`, `routes/api_calendar.php`):
+### Tests & QA
+- `tests/Feature/*`: Suite Pest untuk auth, team management, API user, OAuth, profil, dsb.
+- `tests/Feature/Controllers/ApiUserControllerTest.php`: Uji hak akses & operasi API user.
+- `tests/Feature/Policies/UserPolicyTest.php`: Memastikan aturan peran.
+- `tests/Feature/Controllers/DashboardControllerTest.php`: Redirect ke kalender.
+- `tests/Unit/*`: Contoh uji unit dasar.
 
-- `GET /api/events`: Ambil event berdasarkan rentang `start/end`, pencarian `q`, dan filter `division[]`.
-- `POST /api/events`: Buat event (beserta peserta dan divisi; dukung recurrence).
-- `PUT /api/events/{event}`: Perbarui event (field, peserta, divisi, recurrence).
-- `DELETE /api/events/{event}`: Hapus event.
-- `apiResource('user', ...)`: API manajemen user (Sanctum) — index, store, show, update, destroy.
+### Dokumentasi & Referensi
+- `docs/calendar_setup.md`: Panduan setup kalender.
+- `README.md`: Petunjuk instalasi, fitur, dan dokumentasi pengguna.
+- `app_summary.md`: Ringkasan arsitektur (berkas ini).
 
-—
+## Alur Data & Database Flow
+1. Pengguna login melalui Jetstream (email/password, magic link, atau OAuth). Sanctum menyiapkan cookie sesi.
+2. Akses `/calendar` memicu `CalendarController` yang memastikan divisi default tersedia dan memberikan `today`, `view`, `date`, dan `divisionOptions` ke Inertia.
+3. Frontend `Calendar/Index.vue` menghitung rentang tanggal (hari/minggu/bulan) dan memanggil `GET /api/events` dengan parameter `start`, `end`, `q`, dan `division[]`.
+4. `Api\EventController@index` memuat event non-rekuren yang overlap rentang, memfilter berdasarkan teks & divisi, lalu memuat relasi divisi & peserta.
+5. Event rekuren diekspansi dalam rentang diminta (weekly dengan daftar hari + interval, monthly dengan tanggal bulan + interval). Setiap instansi diberi `occurrence_key` untuk identifikasi di UI.
+6. `EventResource` mengembalikan JSON siap render. Vue memperbarui grid bulan, daftar hari, timeline, dan metrik mingguan/bulanan.
+7. Saat membuat/memperbarui event, frontend mengirim payload ke `/api/events` atau `/api/events/{id}` (dengan XSRF token). Request divalidasi oleh `StoreEventRequest`/`UpdateEventRequest`.
+8. Controller menyimpan event, menyinkronkan relasi pivot `divisions` dan `participantUsers`, serta mencatat perubahan di `event_change_logs` (jika tabel tersedia).
+9. Penghapusan event membuat snapshot nilai lama, menyimpan log, lalu menghapus record (FK `event_id` di-log akan di-null).
+10. Panel admin memanggil `/admin/users/logs` dan `/admin/events/logs` (JSON). Controller log memfilter berdasarkan tanggal dan mengembalikan daftar perubahan dengan actor & target.
+11. Update pengguna oleh admin diverifikasi `UpdateManagedUserRequest`, perubahan disimpan, role terproteksi, dan log ditulis ke `user_change_logs`.
 
-## Controllers (Ringkas Per Berkas)
+## Workflow Pengguna
+1. **Masuk**: Pengguna membuka `/`, diarahkan ke login Jetstream. Dapat menggunakan OAuth (GitHub/GitLab) atau magic link.
+2. **Beranda**: Setelah login, `/dashboard` mengarahkan ke `/calendar`.
+3. **Navigasi Kalender**: Pilih tampilan bulan/hari, gunakan filter divisi & pencarian, lihat metrik mingguan/bulanan, dan pilih hari untuk melihat daftar serta timeline.
+4. **Kelola Kegiatan**:
+   - Admin/Editor membuka modal form untuk membuat kegiatan (jam kerja default 07:30-16:00 untuk `all_day`).
+   - Atur rekuren weekly (hari + interval) atau monthly (tanggal + interval + until).
+   - Tambah peserta (daftar ID user) dan hubungkan ke divisi.
+   - Editor hanya dapat mengubah/hapus event yang dibuatnya; Admin bebas.
+5. **Audit & Admin**: Admin membuka `/admin/users` untuk memperbarui nama/email/NIP/telepon/role, melihat log perubahan pengguna & kalender berdasarkan tanggal, serta kembali ke kalender.
+6. **Profil & Teams**: Pengguna memperbarui profil melalui modal profil cepat atau halaman `/profile`, mengelola tim di `/teams`, dan mengakses langganan di `/subscriptions` bila fitur diaktifkan.
+7. **Chat & Fitur Tambahan**: Halaman `/chat` menyediakan antarmuka AI (menggunakan Prism) jika langganan aktif; akses dilakukan setelah autentikasi.
 
-- `app/Http/Controllers/CalendarController.php`: Render halaman Inertia `Calendar/Index`; memastikan divisi default tersedia; mengirim `today`, `view`, `date`, `divisionOptions`.
-- `app/Http/Controllers/DashboardController.php`: Satu aksi `__invoke` untuk redirect ke `calendar.index`.
-- `app/Http/Controllers/Api/EventController.php`: CRUD event + ekspansi recurrence mingguan/bulanan dalam rentang diminta; filter teks dan divisi; respon JSON via `EventResource`.
-- `app/Http/Controllers/ApiUserController.php`: API user berbasis Sanctum dan Jetstream (list user tim, buat user via `CreateNewUser`, update profil via `UpdateUserProfileInformation`, hapus via `DeleteUser`).
-- `app/Http/Controllers/User/OauthController.php`: Alur OAuth (redirect/callback/link/unlink) sesuai `config/oauth.php`.
-- `app/Http/Controllers/User/LoginLinkController.php`: Magic link (buat token, kirim email, login via URL bertanda tangan).
-- `app/Http/Controllers/SubscriptionController.php`: Halaman/aksi langganan Stripe (Cashier) termasuk portal dan checkout.
-- `app/Http/Controllers/ChatController.php`: Halaman chat; memeriksa status subscription dan menyiapkan model Prism.
+## Automasi & Tooling
+- `composer dev`: Menjalankan server Laravel, queue listener, pail log viewer, dan Vite secara paralel.
+- `composer setup`: Regenerasi key, migrate fresh + seed, build aset dengan Bun, dan generate dokumentasi Scribe.
+- `composer analyse|format|test`: Menjalankan PHPStan, Pint+Rector, dan suite Pest.
+- Vite scripts (`npm run dev|build`, `bun run dev|build`) mengelola aset frontend.
 
-—
+## Catatan Keamanan & Operasional
+- Semua endpoint kalender dan admin dibungkus `auth:sanctum` + middleware role; pastikan konfigurasi sanctum cookie sesuai domain produksi.
+- Ketergantungan timezone: server menggunakan timezone default Laravel; pastikan `APP_TIMEZONE` konsisten agar ekspansi rekuren cocok dengan zona pengguna.
+- Audit log hanya berfungsi jika migrasi log dijalankan; tanpa tabel tersebut aplikasi tetap berjalan namun tanpa histori perubahan.
+- Pertimbangkan integrasi fitur lanjutan (autocomplete peserta, ekspor iCal, drag & drop event) sesuai kebutuhan.
 
-## Requests (Validasi Input)
-
-- `app/Http/Requests/StoreEventRequest.php`: Validasi pembuatan event (judul, waktu, lokasi, `all_day`, `participant_user_ids.*`, `division_ids.*`, serta `recurrence_*`).
-- `app/Http/Requests/UpdateEventRequest.php`: Validasi pembaruan event (aturan mirip, sifatnya `sometimes`).
-- `app/Http/Requests/Admin/UpdateManagedUserRequest.php`: Validasi update user dari panel admin (nama, email, nip/phone, role, password opsional).
-
-—
-
-## Models & Relasi (inti kalender)
-
-- `app/Models/Event.php`
-  - Fillable: `title, description, location, start_at, end_at, all_day, created_by, recurrence_type, recurrence_rule, recurrence_until`.
-  - Casts: `start_at`/`end_at` datetime, `all_day` boolean, `recurrence_rule` array, `recurrence_until` date.
-  - Relasi: `creator` (User), `participantUsers` (pivot `event_participants` + `participant_role`), `divisions` (pivot `event_divisions`).
-  - Scope: `overlap(start,end)` untuk ambil event yang beririsan rentang.
-- `app/Models/Division.php`
-  - Fillable: `name`; Relasi: `users` (hasMany), `events` (belongsToMany via `event_divisions`).
-- `app/Models/User.php`
-  - Peran: `admin`, `editor`, `viewer`; konstanta `ADMIN_EMAIL` untuk admin default.
-  - Trait: Jetstream Teams, Sanctum, Cashier, Profile Photo, 2FA.
-  - Guarded default; casts termasuk `password` hashed, `role` string.
-  - Method util: `isAdmin()/isEditor()/isViewer()`; `canAccessPanel()` Filament true.
-
-—
-
-## Policies & Peran
-
-- `app/Policies/EventPolicy.php`
-  - `before`: admin selalu diizinkan.
-  - `create`: admin/editor.
-  - `update/delete`: editor hanya untuk event yang ia buat; admin diizinkan lewat `before`.
-- `app/Policies/UserPolicy.php`
-  - Berbasis Jetstream Teams + Sanctum token ability (`read/create/update/delete`).
-  - Pembatasan penghapusan diri sendiri; hanya admin yang boleh hapus user lain.
-
-—
-
-## Resource Serializer
-
-- `app/Http/Resources/EventResource.php`: Serialisasi event ke JSON (termasuk divisions, participants dengan division mereka, dan `occurrence_key` untuk instance recurrence).
-
-—
-
-## Skema Database & Alur Data
-
-Migrations utama:
-
-- `0001_01_01_000000_create_users_table.php`: Tabel user dasar (Jetstream/Cashier field umum).
-- `2025_09_20_000001_add_nip_and_phone_to_users_table.php`: Tambah kolom `nip` dan `phone` pada users.
-- `2025_09_20_010000_add_role_to_users_table.php`: Tambah `role` (default `viewer`) dan set admin untuk email `brianhabib252@gmail.com`.
-- `2025_01_01_000000_create_divisions_table.php`: Tabel `divisions` (`name` unik).
-- `2025_01_01_000100_add_division_id_to_users_table.php`: Foreign key opsional `users.division_id -> divisions.id`.
-- `2025_01_01_000200_create_events_table.php`: Tabel `events` (judul, waktu, lokasi, `all_day`, `created_by`, + kolom recurrence).
-- `2025_01_01_000300_create_event_participants_table.php`: Pivot `event_participants` (`event_id`, `user_id`, `participant_role`, unik gabungan).
-- `2025_01_01_000400_create_event_divisions_table.php`: Pivot `event_divisions` (`event_id`, `division_id`, unik gabungan).
-- `2025_01_01_000450_add_recurrence_to_events_table.php`: Guarded add kolom recurrence bila belum ada.
-
-Seeder:
-
-- `DatabaseSeeder.php`: Membuat user contoh + memanggil `DivisionSeeder` dan `EventSeeder`.
-- `DivisionSeeder.php`: Membuat divisi default: Seluruh Pegawai, Hakim, Kesekretariatan, Kepaniteraan, Dinas Luar.
-- `EventSeeder.php`: Generate ~20 event acak dalam bulan berjalan dan mengaitkan 1–2 divisi per event.
-
-Alur data inti:
-
-- FE menentukan rentang berdasarkan view (day/week/month + buffer) dan memanggil `GET /api/events`.
-- BE mengambil event non-recurring yang overlap + mengekspansi recurring (weekly by `days` atau monthly by `month_days`, menghormati `interval` dan `recurrence_until`).
-- Hasil dikembalikan dalam format `EventResource` untuk dirender di grid bulan/timeline hari.
-- Pembuatan/pembaruan event menyinkronkan relasi `participantUsers` dan `divisions` via pivot.
-
-—
-
-## Frontend (Inertia + Vue)
-
-- Layout: `resources/views/app.blade.php` menyertakan CSRF token, Ziggy routes, dan Vite bundle.
-- Boot: `resources/js/app.js` membuat Inertia app, memuat halaman `resources/js/Pages/*`, Ziggy, dan Unhead.
-- Halaman Kalender: `resources/js/Pages/Calendar/Index.vue`
-  - State: `view`, `date`, `divisionOptions` dari controller; `events` dari `/api/events`.
-  - Fitur: tombol navigasi tanggal, filter divisi (checkbox), pencarian `q`, counter harian/mingguan/bulanan.
-  - Izin FE: `viewer` (lihat saja), `editor`/`admin` (buat/edit; delete untuk admin dan editor terhadap miliknya sesuai policy).
-  - API: memakai cookie Sanctum (`/sanctum/csrf-cookie`) + header `X-XSRF-TOKEN` saat request.
-- Komponen Kalender:
-  - `Components/Calendar/MonthView.vue`: grid bulan, event chips per hari, trigger buka form.
-  - `Components/Calendar/DayView.vue`: timeline 06:00–18:00 dengan penataan overlap.
-  - `Components/Calendar/SidebarDayList.vue`: daftar event per hari dengan aksi edit/hapus.
-  - `Components/Calendar/EventFormModal.vue`: form buat/ubah event, termasuk recurrence (weekly/monthly + interval + until), pilihan divisi, peserta (CSV ID saat ini).
-  - `Components/Calendar/{EventBlock,EventChip,DayCell}.vue`: elemen tampilan event.
-- Komponen UI umum: `resources/js/Components/ui/*` (button, input, select, modal, tabs, dsb.).
-
-—
-
-## Workflow Pengguna (end-to-end)
-
-1) Otentikasi
-
-- Kunjungi `/` -> redirect ke halaman login. Login via email/password, magic link, atau OAuth (GitHub/GitLab jika aktif).
-- Setelah login, `/dashboard` -> redirect ke `/calendar`.
-
-2) Mengelola Jadwal
-
-- Lihat kalender bulan; pilih tanggal untuk melihat daftar & timeline.
-- Filter berdasarkan Divisi dan/atau gunakan pencarian teks.
-- Tambah event (admin/editor): buka modal, isi detail, pilih divisi/peserta, opsional atur pengulangan (mingguan/bulanan), simpan -> data tersimpan beserta relasi.
-- Edit/Hapus event: admin bebas; editor terbatas pada event yang ia buat; viewer hanya melihat.
-- Event berulang diekspansi otomatis dalam rentang tampil, tampil seperti event biasa.
-
-3) Manajemen Pengguna & Profil
-
-- Admin dapat mengelola user melalui API/halaman admin (role: viewer/editor/admin). Email `ADMIN_EMAIL` selalu admin.
-- Profil user dapat diperbarui (nama, email, nip, phone, foto) via Fortify action.
-
-4) Langganan (opsional)
-
-- `/subscriptions` menampilkan/mengelola status langganan Stripe bila `cashier.billing_enabled=true`.
-
-—
-
-## Endpoint API (Ringkas)
-
-- `GET /api/events?start&end&q&division[]`: daftar event dalam rentang.
-- `POST /api/events`: buat event.
-- `PUT /api/events/{id}`: perbarui event.
-- `DELETE /api/events/{id}`: hapus event.
-- `apiResource('user', ...)`: index/store/show/update/destroy (butuh token Sanctum + izin policy).
-
-—
-
-## Build & Pengembangan
-
-- `composer dev`: jalankan php server, queue listener, pail log, dan Vite secara paralel.
-- `composer setup`: key:generate -> migrate:fresh --seed -> bun install/build -> scribe:generate.
-- Manual: `php artisan serve` + `npm run dev` (atau `bun run dev`).
-
-—
-
-## Keamanan & Catatan
-
-- Pastikan semua route API kalender berada di balik `auth:sanctum` (saat ini sudah dibungkus group di `routes/api_calendar.php`).
-- FE menggunakan cookie Sanctum + header `X-XSRF-TOKEN` untuk request aman.
-- Perhatikan konsistensi timezone (server/DB vs browser) pada perhitungan rentang.
-- Peningkatan yang disarankan: autocomplete peserta, iCal export, drag-resize di UI, dan dukungan kalender mingguan penuh.
-
-—
-
-## Referensi Berkas Penting (pilihan)
-
-- Konfigurasi inti: `composer.json`, `config/app.php`, `config/auth.php`, `config/sanctum.php`, `config/jetstream.php`.
-- Kalender: `routes/calendar.php`, `routes/api_calendar.php`, `app/Http/Controllers/{CalendarController,Api/EventController}.php`, `app/Http/Resources/EventResource.php`, `resources/js/Pages/Calendar/Index.vue`, `resources/js/Components/Calendar/*`.
-- Database: `database/migrations/2025_*`, `database/seeders/{DivisionSeeder,EventSeeder}.php`.
-- Auth/OAuth: `routes/web.php` (group auth), `app/Http/Controllers/User/*`, `config/oauth.php`.
-- Billing: `app/Http/Controllers/SubscriptionController.php`, `config/subscriptions.php`, `config/cashier.php`.
-- Dokumen bantuan: `docs/calendar_setup.md`.
-
+## Dokumentasi Tambahan
+- Dokumentasi API dapat digenerasi via `php artisan scribe:generate` (output HTML di `public/docs`).
+- Gunakan `docs/calendar_setup.md` untuk panduan internal tambahan.

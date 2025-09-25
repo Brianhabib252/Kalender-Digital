@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
+import ConfirmPopup from '../ui/ConfirmPopup.vue'
 
 const props = defineProps({
   date: { type: String, required: true },
@@ -8,7 +9,7 @@ const props = defineProps({
   canEdit: { type: Boolean, default: true },
   canDelete: { type: Boolean, default: true },
 })
-const emit = defineEmits(['close','saved'])
+const emit = defineEmits(['close','saved','failed','deleted'])
 
 const title = ref('')
 const description = ref('')
@@ -59,6 +60,7 @@ watch(() => props.event, (e) => {
 const isEdit = computed(() => !!props.event?.id)
 
 const saving = ref(false)
+const showDeleteConfirm = ref(false)
 
 async function submit() {
   if (saving.value) return
@@ -105,19 +107,13 @@ async function submit() {
   })
   if (!res.ok) {
     if ([401, 403, 419].includes(res.status)) {
-      alert('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
       saving.value = false
+      emit('failed', 'Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
       return
     }
-    try {
-      const data = await res.json()
-      const errs = data?.errors ? Object.values(data.errors).flat().join('\n') : (data?.message || 'Gagal menyimpan kegiatan')
-      alert(errs)
-    } catch (e) {
-      const text = await res.text()
-      alert(text || 'Gagal menyimpan kegiatan')
-    }
+    const message = await toErrorMessage(res, 'Gagal menyimpan kegiatan')
     saving.value = false
+    emit('failed', message)
     return
   }
   saving.value = false
@@ -144,9 +140,56 @@ function xsrfToken() {
   return value ? decodeURIComponent(value) : ''
 }
 
-async function doDelete() {
+const deleteConfirmMessage = computed(() => {
+  const titleValue = props.event?.title
+  return titleValue
+    ? `Kegiatan "${titleValue}" akan dihapus dari kalender.`
+    : 'Kegiatan akan dihapus dari kalender dan tidak dapat dikembalikan.'
+})
+
+function requestDelete() {
   if (!isEdit.value) return
-  if (!confirm('Hapus kegiatan ini? Tindakan ini tidak dapat dibatalkan.')) return
+  if (deleting.value) return
+  if (formReadOnly.value || !props.canDelete) return
+  showDeleteConfirm.value = true
+}
+
+function cancelDelete() {
+  if (deleting.value) return
+  showDeleteConfirm.value = false
+}
+
+async function confirmDelete() {
+  if (deleting.value) return
+  showDeleteConfirm.value = false
+  await performDelete()
+}
+
+async function toErrorMessage(response, fallback = 'Terjadi kesalahan') {
+  if (!response) return fallback
+  try {
+    const data = await response.clone().json()
+    if (data?.errors) {
+      const merged = Object.values(data.errors).flat().filter(Boolean)
+      if (merged.length) return merged.join('\n')
+    }
+    if (typeof data?.message === 'string' && data.message.trim()) {
+      return data.message
+    }
+  } catch {
+    // ignore JSON parsing issues
+  }
+  try {
+    const text = await response.text()
+    if (text) return text
+  } catch {
+    // ignore text parsing issues
+  }
+  return fallback
+}
+
+async function performDelete() {
+  if (!isEdit.value) return
   if (deleting.value) return
   deleting.value = true
   await ensureSanctumCookie()
@@ -163,22 +206,17 @@ async function doDelete() {
   })
   if (!res.ok) {
     if ([401, 403, 419].includes(res.status)) {
-      alert('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
       deleting.value = false
+      emit('failed', 'Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
       return
     }
-    try {
-      const data = await res.json()
-      alert(data?.message || 'Gagal menghapus kegiatan')
-    } catch (e) {
-      const text = await res.text()
-      alert(text || 'Gagal menghapus kegiatan')
-    }
+    const message = await toErrorMessage(res, 'Gagal menghapus kegiatan')
     deleting.value = false
+    emit('failed', message)
     return
   }
   deleting.value = false
-  emit('saved', isEdit.value ? 'updated' : 'created')
+  emit('deleted')
 }
 </script>
 
@@ -280,7 +318,7 @@ async function doDelete() {
           v-if="isEdit && props.canDelete"
           class="px-4 py-2 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-60"
           :disabled="formReadOnly || deleting"
-          @click="doDelete"
+          @click="requestDelete"
         >
           {{ deleting ? 'Menghapus...' : 'Hapus' }}
         </button>
@@ -297,6 +335,16 @@ async function doDelete() {
         </div>
       </div>
     </div>
+    <ConfirmPopup
+      :visible="showDeleteConfirm"
+      title="Hapus kegiatan ini?"
+      :message="deleteConfirmMessage"
+      confirm-text="Hapus"
+      cancel-text="Batal"
+      :loading="deleting"
+      @cancel="cancelDelete"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
 
