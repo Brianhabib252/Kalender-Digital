@@ -255,7 +255,6 @@ function triggerError(message) {
 
 function handleError(message) {
   triggerError(message)
-  showForm.value = false
 }
 
 
@@ -490,7 +489,6 @@ async function onDelete(evt) {
 
 <style scoped>
 </style>
-
 
 
 
