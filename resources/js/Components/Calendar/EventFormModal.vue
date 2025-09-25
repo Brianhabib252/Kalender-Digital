@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref, watch, computed } from 'vue'
 
 const props = defineProps({
@@ -8,7 +8,7 @@ const props = defineProps({
   canEdit: { type: Boolean, default: true },
   canDelete: { type: Boolean, default: true },
 })
-const emit = defineEmits(['close','saved','error'])
+const emit = defineEmits(['close','saved'])
 
 const title = ref('')
 const description = ref('')
@@ -105,17 +105,17 @@ async function submit() {
   })
   if (!res.ok) {
     if ([401, 403, 419].includes(res.status)) {
-      emit('error', isEdit.value ? 'Anda tidak memiliki akses untuk mengubah kegiatan ini' : 'Anda tidak memiliki akses untuk membuat kegiatan')
+      alert('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
       saving.value = false
       return
     }
     try {
       const data = await res.json()
       const errs = data?.errors ? Object.values(data.errors).flat().join('\n') : (data?.message || 'Gagal menyimpan kegiatan')
-      emit('error', errs || 'Gagal menyimpan kegiatan')
+      alert(errs)
     } catch (e) {
       const text = await res.text()
-      emit('error', text || 'Gagal menyimpan kegiatan')
+      alert(text || 'Gagal menyimpan kegiatan')
     }
     saving.value = false
     return
@@ -163,22 +163,22 @@ async function doDelete() {
   })
   if (!res.ok) {
     if ([401, 403, 419].includes(res.status)) {
-      emit('error', 'Anda tidak memiliki akses untuk menghapus kegiatan ini')
+      alert('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
       deleting.value = false
       return
     }
     try {
       const data = await res.json()
-      emit('error', data?.message || 'Gagal menghapus kegiatan')
+      alert(data?.message || 'Gagal menghapus kegiatan')
     } catch (e) {
       const text = await res.text()
-      emit('error', text || 'Gagal menghapus kegiatan')
+      alert(text || 'Gagal menghapus kegiatan')
     }
     deleting.value = false
     return
   }
   deleting.value = false
-  emit('saved', 'deleted')
+  emit('saved', isEdit.value ? 'updated' : 'created')
 }
 </script>
 
@@ -187,7 +187,7 @@ async function doDelete() {
     <div class="w-full max-w-2xl bg-white rounded-2xl shadow-xl border max-h-[85vh] flex flex-col">
       <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b">
         <div class="text-lg font-semibold text-gray-800">{{ isEdit ? 'Ubah' : 'Buat' }} Kegiatan</div>
-        <button class="px-2 py-1 rounded hover:bg-gray-100" @click="$emit('close')">Ã¢Å“â€¢</button>
+        <button class="px-2 py-1 rounded hover:bg-gray-100" @click="$emit('close')">✕</button>
       </div>
       <div class="space-y-4 p-5 overflow-y-auto flex-1">
         <div>
