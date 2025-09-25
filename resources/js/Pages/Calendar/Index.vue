@@ -1,13 +1,14 @@
-<script setup>
+﻿<script setup>
 import { ref, computed, watchEffect, onBeforeUnmount } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import MonthView from '../../Components/Calendar/MonthView.vue'
 import DayView from '../../Components/Calendar/DayView.vue'
 import SidebarDayList from '../../Components/Calendar/SidebarDayList.vue'
 import EventFormModal from '../../Components/Calendar/EventFormModal.vue'
-import LoadingOverlay from '../../Components/UI/LoadingOverlay.vue'
+import LoadingOverlay from '../../Components/ui/LoadingOverlay.vue'
 import ProfileSettingsModal from '../../Components/Profile/ProfileSettingsModal.vue'
-import SuccessPopup from '../../Components/UI/SuccessPopup.vue'
+import SuccessPopup from '../../Components/ui/SuccessPopup.vue'
+import FailurePopup from '../../Components/ui/FailurePopup.vue'
 
 const props = defineProps({
   today: String,
@@ -55,9 +56,13 @@ const editingEvent = ref(null)
 const showSuccess = ref(false)
 const successMessage = ref('')
 let successTimer = null
+const showError = ref(false)
+const errorMessage = ref('')
+let errorTimer = null
 
 onBeforeUnmount(() => {
   clearTimeout(successTimer)
+  clearTimeout(errorTimer)
 })
 
 function startOfWeek(date) {
@@ -239,6 +244,21 @@ function triggerSuccess(message) {
   }, 2000)
 }
 
+function triggerError(message) {
+  errorMessage.value = message || 'Terjadi kesalahan. Silakan coba lagi.'
+  showError.value = true
+  clearTimeout(errorTimer)
+  errorTimer = setTimeout(() => {
+    showError.value = false
+  }, 2500)
+}
+
+function handleError(message) {
+  triggerError(message)
+}
+
+
+
 function onSaved(kind = 'saved') {
   showForm.value = false
   fetchEvents()
@@ -246,6 +266,8 @@ function onSaved(kind = 'saved') {
     triggerSuccess('Kegiatan berhasil dibuat')
   } else if (kind === 'updated') {
     triggerSuccess('Kegiatan berhasil diperbarui')
+  } else if (kind === 'deleted') {
+    triggerSuccess('Kegiatan berhasil dihapus')
   } else {
     triggerSuccess('Perubahan berhasil disimpan')
   }
@@ -267,12 +289,16 @@ async function onDelete(evt) {
   })
   if (!res.ok) {
     if ([401, 403, 419].includes(res.status)) {
-      alert('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
+      triggerError('Anda tidak memiliki akses untuk menghapus kegiatan ini')
       return
     }
     try {
-      const data = await res.json(); alert(data?.message || 'Gagal menghapus kegiatan')
-    } catch (e) { const t = await res.text(); alert(t || 'Gagal menghapus kegiatan') }
+      const data = await res.json()
+      triggerError(data?.message || 'Gagal menghapus kegiatan')
+    } catch (e) {
+      const t = await res.text()
+      triggerError(t || 'Gagal menghapus kegiatan')
+    }
     return
   }
   fetchEvents()
@@ -455,6 +481,7 @@ async function onDelete(evt) {
         :can-delete="canDelete"
         @close="showForm=false"
         @saved="onSaved"
+        @error="handleError"
       />
     </div>
   </section>
@@ -462,3 +489,11 @@ async function onDelete(evt) {
 
 <style scoped>
 </style>
+
+
+
+
+
+
+
+
