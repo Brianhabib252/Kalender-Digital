@@ -2,7 +2,7 @@
   <transition name="fade-pop">
     <div
       v-if="visible"
-      class="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      class="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 backdrop-blur-sm"
     >
       <div class="relative flex flex-col items-center gap-4 rounded-3xl bg-white px-12 py-10 text-center shadow-[0_45px_120px_-40px_rgba(244,63,94,0.45)]">
         <div class="failure-cross h-16 w-16">
@@ -69,3 +69,4 @@ const props = defineProps({
   to { stroke-dashoffset: 0; }
 }
 </style>
+
