@@ -64,7 +64,13 @@ async function submit() {
   if (saving.value) return
   if (formReadOnly.value) return
   saving.value = true
-  await ensureSanctumCookie()
+  try {
+    await ensureSanctumCookie()
+  } catch (e) {
+    emit('error', 'Gagal mempersiapkan permintaan. Periksa koneksi Anda.')
+    saving.value = false
+    return
+  }
   const payload = {
     title: title.value,
     description: description.value || null,
@@ -91,18 +97,25 @@ async function submit() {
   const url = isEdit.value ? `/api/events/${props.event.id}` : '/api/events'
   const method = isEdit.value ? 'PUT' : 'POST'
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-  const res = await fetch(url, {
-    method,
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
-      ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
-    },
-    body: JSON.stringify(payload),
-  })
+  let res
+  try {
+    res = await fetch(url, {
+      method,
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
+        ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
+      },
+      body: JSON.stringify(payload),
+    })
+  } catch (e) {
+    emit('error', 'Tidak dapat mengirim data ke server. Coba lagi.')
+    saving.value = false
+    return
+  }
   if (!res.ok) {
     if ([401, 403, 419].includes(res.status)) {
       emit('error', isEdit.value ? 'Anda tidak memiliki akses untuk mengubah kegiatan ini' : 'Anda tidak memiliki akses untuk membuat kegiatan')
@@ -149,7 +162,13 @@ async function doDelete() {
   if (!confirm('Hapus kegiatan ini? Tindakan ini tidak dapat dibatalkan.')) return
   if (deleting.value) return
   deleting.value = true
-  await ensureSanctumCookie()
+  try {
+    await ensureSanctumCookie()
+  } catch (e) {
+    emit('error', 'Gagal mempersiapkan permintaan. Periksa koneksi Anda.')
+    deleting.value = false
+    return
+  }
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
   const res = await fetch(`/api/events/${props.event.id}`, {
     method: 'DELETE',
@@ -302,3 +321,4 @@ async function doDelete() {
 
 <style scoped>
 </style>
+
