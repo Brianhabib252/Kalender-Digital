@@ -117,82 +117,12 @@ async function submit() {
     return
   }
   if (!res.ok) {
-    if ([401, 403, 419].includes(res.status)) {
-      emit('error', isEdit.value ? 'Anda tidak memiliki akses untuk mengubah kegiatan ini' : 'Anda tidak memiliki akses untuk membuat kegiatan')
-      saving.value = false
-      return
-    }
-    try {
-      const data = await res.json()
-      const errs = data?.errors ? Object.values(data.errors).flat().join('\n') : (data?.message || 'Gagal menyimpan kegiatan')
-      emit('error', errs || 'Gagal menyimpan kegiatan')
-    } catch (e) {
-      const text = await res.text()
-      emit('error', text || 'Gagal menyimpan kegiatan')
-    }
-    saving.value = false
-    return
-  }
-  saving.value = false
-  emit('saved', isEdit.value ? 'updated' : 'created')
-}
-
-const deleting = ref(false)
-const formReadOnly = computed(() => !props.canEdit)
-
-let sanctumBootstrapped = false
-
-async function ensureSanctumCookie() {
-  if (sanctumBootstrapped) return
-  await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-  sanctumBootstrapped = true
-}
-
-function xsrfToken() {
-  const value = document.cookie
-    .split('; ')
-    .find(row => row.startsWith('XSRF-TOKEN='))
-    ?.split('=')[1]
-
-  return value ? decodeURIComponent(value) : ''
-}
-
-async function doDelete() {
-  if (!isEdit.value) return
-  if (!confirm('Hapus kegiatan ini? Tindakan ini tidak dapat dibatalkan.')) return
-  if (deleting.value) return
-  deleting.value = true
-  try {
-    await ensureSanctumCookie()
-  } catch (e) {
-    emit('error', 'Gagal mempersiapkan permintaan. Periksa koneksi Anda.')
-    deleting.value = false
-    return
-  }
-  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-  const res = await fetch(`/api/events/${props.event.id}`, {
-    method: 'DELETE',
-    credentials: 'same-origin',
-    headers: {
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
-      ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
-    },
-  })
-  if (!res.ok) {
-    if ([401, 403, 419].includes(res.status)) {
-      emit('error', 'Anda tidak memiliki akses untuk menghapus kegiatan ini')
+    if ([401, 403, 419].includes(res.status)) {      emit('close')
       deleting.value = false
       return
     }
-    try {
-      const data = await res.json()
-      emit('error', data?.message || 'Gagal menghapus kegiatan')
-    } catch (e) {
-      const text = await res.text()
-      emit('error', text || 'Gagal menghapus kegiatan')
-    }
+    try {    } catch (e) {    }
+    emit('close')
     deleting.value = false
     return
   }
@@ -321,4 +251,6 @@ async function doDelete() {
 
 <style scoped>
 </style>
+
+
 
