@@ -37,7 +37,15 @@ watch(() => props.event, (e) => {
     if (e.start_at) startTime.value = e.start_at.slice(11,16)
     if (e.end_at) endTime.value = e.end_at.slice(11,16)
     divisionIds.value = (e.divisions || []).map(x => x.id)
-    participantIdsCsv.value = (e.participants || []).map(x => x.id).join(',')
+    const summaryText = typeof e.participant_summary === 'string' ? e.participant_summary : ''
+    if (summaryText.trim()) {
+      participantIdsCsv.value = summaryText
+    } else {
+      participantIdsCsv.value = (e.participants || [])
+        .map(x => x?.name || x?.email || (x?.id != null ? `ID ${x.id}` : ''))
+        .filter(Boolean)
+        .join(', ')
+    }
     recurrenceEnabled.value = false
   } else {
     title.value = ''
@@ -78,6 +86,9 @@ async function submit() {
   }
   const participants = participantIdsCsv.value.split(',').map(s => parseInt(s.trim(),10)).filter(Boolean)
   if (participants.length > 0) payload.participant_user_ids = participants
+
+  const summaryText = participantIdsCsv.value.trim()
+  payload.participant_summary = summaryText ? summaryText : null
 
   if (recurrenceEnabled.value) {
     payload.recurrence_type = recurrenceType.value
@@ -224,8 +235,16 @@ async function performDelete() {
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
     <div class="w-full max-w-2xl bg-white rounded-2xl shadow-xl border max-h-[85vh] flex flex-col">
       <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b">
-        <div class="text-lg font-semibold text-gray-800">{{ isEdit ? 'Ubah' : 'Buat' }} Kegiatan</div>
-        <button class="px-2 py-1 rounded hover:bg-gray-100" @click="$emit('close')">✕</button>
+        <div class="text-lg font-semibold text-gray-800">
+          {{ isEdit ? 'Ubah Kegiatan' : 'Tambahkan Kegiatan' }}
+        </div>
+        <button
+          type="button"
+          class="px-3 py-1.5 rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          @click="$emit('close')"
+        >
+          Tutup
+        </button>
       </div>
       <div class="space-y-4 p-5 overflow-y-auto flex-1">
         <div>
@@ -270,8 +289,8 @@ async function performDelete() {
           </div>
         </div>
         <div>
-          <label class="block text-sm mb-1 text-gray-700">Peserta (ID user, pisahkan koma)</label>
-          <input v-model="participantIdsCsv" placeholder="cth: 12,45,71" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" :readonly="formReadOnly" :disabled="formReadOnly" />
+          <label class="block text-sm mb-1 text-gray-700">Nama Peserta (Pisahkan dengan koma)</label>
+          <input v-model="participantIdsCsv" placeholder="cth: Budi, Adit, Dina" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" :readonly="formReadOnly" :disabled="formReadOnly" />
         </div>
 
         <div class="border-t pt-3">

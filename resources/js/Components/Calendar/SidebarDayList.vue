@@ -52,6 +52,19 @@ function handleDelete(event) {
   if (!props.canDelete) return
   emit('delete-event', event)
 }
+
+function participantNames(event) {
+  return (event?.participants || [])
+    .map(p => p?.name || p?.pivot?.name || p?.email || (p?.id != null ? `ID ${p.id}` : ''))
+    .filter(Boolean)
+}
+
+function participantDisplay(event) {
+  const summary = (event?.participant_summary || '').trim()
+  if (summary) return summary
+  const names = participantNames(event)
+  return names.length ? names.join(', ') : ''
+}
 </script>
 
 <template>
@@ -70,6 +83,10 @@ function handleDelete(event) {
             </span>
           </div>
           <div v-if="e.location" class="mt-1 text-sm text-gray-600">{{ e.location }}</div>
+          <div v-if="e.description" class="mt-1 text-sm text-gray-500">{{ e.description }}</div>
+          <div v-if="participantDisplay(e)" class="mt-2 text-sm text-gray-600">
+            <span class="font-semibold text-gray-700">Peserta:</span> {{ participantDisplay(e) }}
+          </div>
           <div v-if="e.divisions && e.divisions.length" class="mt-2 flex flex-wrap gap-1">
             <span v-for="d in e.divisions" :key="d.id" class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border">
               {{ d.name }}
@@ -112,6 +129,10 @@ function handleDelete(event) {
             </span>
           </div>
           <div v-if="e.location" class="mt-1 text-sm text-gray-600">{{ e.location }}</div>
+          <div v-if="e.description" class="mt-1 text-sm text-gray-500">{{ e.description }}</div>
+          <div v-if="participantDisplay(e)" class="mt-2 text-sm text-gray-600">
+            <span class="font-semibold text-gray-700">Peserta:</span> {{ participantDisplay(e) }}
+          </div>
           <div v-if="e.divisions && e.divisions.length" class="mt-2 flex flex-wrap gap-1">
             <span v-for="d in e.divisions" :key="d.id" class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border">
               {{ d.name }}

@@ -15,7 +15,7 @@ class Event extends Model
     use HasFactory;
 
     protected $fillable = [
-        'title', 'description', 'location', 'start_at', 'end_at', 'all_day', 'created_by',
+        'title', 'description', 'participant_summary', 'location', 'start_at', 'end_at', 'all_day', 'created_by',
         'recurrence_type', 'recurrence_rule', 'recurrence_until',
     ];
 
@@ -63,3 +63,4 @@ class Event extends Model
         });
     }
 }
+

@@ -17,6 +17,7 @@ class StoreEventRequest extends FormRequest
         return [
             'title' => ['required','string','max:255'],
             'description' => ['nullable','string'],
+            'participant_summary' => ['nullable','string'],
             'location' => ['nullable','string','max:255'],
             'start_at' => ['required','date'],
             'end_at' => ['required','date','after:start_at'],
@@ -36,3 +37,4 @@ class StoreEventRequest extends FormRequest
         ];
     }
 }
+

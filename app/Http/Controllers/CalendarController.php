@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Division;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -32,6 +33,7 @@ class CalendarController extends Controller
             'view' => $view,
             'date' => $date,
             'divisionOptions' => $divisions,
+            'participantOptions' => User::query()->orderBy('name')->get(['id','name','email']),
         ]);
     }
 }

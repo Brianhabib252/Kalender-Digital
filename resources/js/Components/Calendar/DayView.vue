@@ -124,16 +124,16 @@ function handleOpenEdit(event) {
 
 <template>
   <div class="relative">
-    <div class="flex">
-      <div class="w-16 text-sm text-right pr-2 select-none">
+    <div class="flex min-w-full">
+      <div class="w-14 select-none pr-2 text-right text-xs text-gray-500 sm:w-16 sm:text-sm">
         <div :style="{ height: headerOffset + 'px' }"></div>
-        <div v-for="h in hours" :key="h" :style="{ height: hourHeight + 'px' }" class="text-gray-500">{{ (h+'').padStart(2,'0') }}:00</div>
+        <div v-for="h in hours" :key="h" :style="{ height: hourHeight + 'px' }">{{ (h+'').padStart(2,'0') }}:00</div>
       </div>
-      <div class="flex-1 relative border rounded-xl bg-white overflow-hidden">
-        <div class="sticky top-0 z-10 bg-emerald-50/60 border-b px-4 py-3 flex items-center justify-between">
-          <div class="text-base md:text-lg font-bold text-emerald-700">{{ date }}</div>
+      <div class="relative flex-1 overflow-hidden rounded-xl border bg-white">
+        <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-emerald-50/70 px-3 py-3 sm:px-4">
+          <div class="text-sm font-bold text-emerald-700 sm:text-base md:text-lg">{{ date }}</div>
           <button
-            class="h-10 px-4 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-60"
+            class="h-9 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 sm:h-10 sm:px-4"
             :disabled="!props.canCreate"
             @click="() => handleOpenCreate(date)"
           >

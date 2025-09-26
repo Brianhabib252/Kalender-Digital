@@ -75,42 +75,57 @@ function isWeekend(d) { const g = d.getDay(); return g === 0 || g === 6 }
 
 <template>
   <div class="rounded-xl overflow-hidden">
-    <div class="grid grid-cols-7 bg-emerald-600 text-white text-base md:text-lg font-bold">
+    <div class="grid grid-cols-7 bg-emerald-600 text-center text-xs font-semibold uppercase tracking-wide text-white sm:text-sm md:text-base">
       <div
-        class="p-2 text-center"
+        class="p-2"
         v-for="w in ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu']"
         :key="w"
       >{{ w }}</div>
     </div>
-    <div class="grid grid-cols-7 border-t divide-x divide-gray-200">
+    <div class="grid grid-cols-7 divide-x divide-gray-200 border-t">
       <template v-for="(week,wi) in weeks" :key="wi">
-        <div v-for="(d,di) in week" :key="di" class="min-h-[130px] p-2 border-b border-gray-200 bg-white rounded-xl">
+        <div
+          v-for="(d,di) in week"
+          :key="di"
+          class="min-h-[110px] border-b border-gray-200 bg-white p-1.5 sm:min-h-[130px] sm:p-2"
+        >
           <DayCell :date="d" :is-today="isToday(d)" :muted="!isCurrentMonth(d)" @click="() => emit('select-day', ymd(d))">
             <template #header>
-              <div class="relative h-12">
-                <!-- Always show +Buat -->
+              <div class="relative pt-3 pr-8">
                 <button
-                  class="absolute right-0 top-0 text-[12px] text-emerald-600 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="absolute right-0 top-0 text-[10px] font-semibold text-emerald-600 transition hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[11px]"
                   :disabled="!props.canCreate"
                   @click.stop="() => handleOpenCreate(ymd(d))"
                 >
                   + Buat
                 </button>
-                <!-- If empty: big centered number without inner box -->
-                <div v-if="eventsOfDay(d).length === 0" class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div :class="[
-                    'text-5xl font-extrabold',
-                    isToday(d) ? 'text-emerald-600' : (!isCurrentMonth(d) ? 'text-gray-300' : (isWeekend(d) ? 'text-red-600' : 'text-gray-700'))
-                  ]">{{ d.getDate() }}</div>
-                </div>
-                <!-- Else: compact date badge with rounded edges and padding -->
-                <div v-else :class="[
-                  'absolute left-1/2 -translate-x-1/2 top-1 inline-flex items-center justify-center rounded-lg px-2 py-1 text-3xl font-extrabold border',
-                  isToday(d) ? 'text-emerald-600 border-emerald-200 bg-emerald-50' : (!isCurrentMonth(d) ? 'text-gray-300 border-gray-100' : (isWeekend(d) ? 'text-red-600 border-red-200 bg-red-50/30' : 'text-gray-700 border-gray-200'))
-                ]">{{ d.getDate() }}</div>
+                <div
+                  v-if="eventsOfDay(d).length === 0"
+                  :class="[
+                    'select-none text-4xl font-extrabold leading-none sm:text-5xl',
+                    isToday(d)
+                      ? 'text-emerald-600'
+                      : (!isCurrentMonth(d)
+                        ? 'text-gray-300'
+                        : (isWeekend(d) ? 'text-red-600' : 'text-gray-700'))
+                  ]"
+                >{{ d.getDate() }}</div>
+                <div
+                  v-else
+                  :class="[
+                    'inline-flex select-none items-center justify-center rounded-lg px-2 py-1 text-xl font-extrabold border sm:text-2xl',
+                    isToday(d)
+                      ? 'text-emerald-600 border-emerald-200 bg-emerald-50'
+                      : (!isCurrentMonth(d)
+                        ? 'text-gray-300 border-gray-100'
+                        : (isWeekend(d)
+                          ? 'text-red-600 border-red-200 bg-red-50/30'
+                          : 'text-gray-700 border-gray-200'))
+                  ]"
+                >{{ d.getDate() }}</div>
               </div>
             </template>
-            <div class="space-y-1 mt-1">
+            <div class="mt-1 space-y-1">
               <template v-for="(e,i) in eventsOfDay(d).slice(0,3)" :key="e.id + ':' + i">
                 <EventChip
                   :event="e"

@@ -16,10 +16,12 @@ const props = defineProps({
   view: { type: String, default: 'month' },
   date: { type: String, default: null },
   divisionOptions: { type: Array, default: () => [] },
+  participantOptions: { type: Array, default: () => [] },
 })
 
 const page = usePage()
 const user = computed(() => page.props?.auth?.user ?? null)
+const participantOptions = computed(() => props.participantOptions ?? [])
 const showProfileModal = ref(false)
 
 const role = computed(() => user.value?.role ?? 'viewer')
@@ -172,6 +174,15 @@ const displayDate = computed(() => {
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const yy = d.getFullYear()
   return `${dd}/${mm}/${yy}`
+})
+
+const selectedDayLabel = computed(() => {
+  const base = parseYMD(selectedDay.value || currentDate.value)
+  try {
+    return base.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit' })
+  } catch {
+    return base.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit' })
+  }
 })
 
 function openProfileModal() {
@@ -334,7 +345,7 @@ async function confirmDelete() {
   }
 }
 
-async function performDelete(evt) {
+async function performDelete(evt, attempt = 0) {
   try {
     await ensureSanctumCookie()
     const res = await fetch(`/api/events/${evt.id}`, {
@@ -347,8 +358,17 @@ async function performDelete(evt) {
       },
     })
     if (!res.ok) {
-      if ([401, 403, 419].includes(res.status)) {
+      if (res.status === 419 && attempt === 0) {
+        sanctumBootstrapped = false
+        await ensureSanctumCookie()
+        return performDelete(evt, attempt + 1)
+      }
+      if ([401, 403].includes(res.status)) {
         triggerError('Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
+        return false
+      }
+      if (res.status === 419) {
+        triggerError('Sesi Anda telah berakhir. Muat ulang halaman dan coba lagi.')
         return false
       }
       const message = await toErrorMessage(res, 'Gagal menghapus kegiatan')
@@ -366,32 +386,32 @@ async function performDelete(evt) {
 </script>
 
 <template>
-  <section class="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50 px-4 py-10 md:px-8">
-    <div class="mx-auto max-w-7xl space-y-6">
+  <section class="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50 px-3 py-8 sm:px-4 md:px-8 md:py-10">
+    <div class="mx-auto w-full max-w-6xl space-y-6 lg:space-y-8">
       <!-- Dashboard header -->
-      <div class="rounded-3xl border border-emerald-100 bg-gradient-to-r from-emerald-100 via-emerald-50 to-white px-6 py-8 shadow-[0_35px_120px_-60px_rgba(16,185,129,0.45)] transition-all duration-300 hover:shadow-[0_45px_160px_-70px_rgba(16,185,129,0.5)]">
+      <div class="rounded-3xl border border-emerald-300 bg-gradient-to-r from-emerald-300 via-emerald-200 to-emerald-100 px-5 py-7 shadow-[0_28px_100px_-45px_rgba(6,95,70,0.6)] transition-all duration-300 hover:shadow-[0_45px_160px_-55px_rgba(6,95,70,0.7)] sm:px-6 md:px-8">
         <div class="space-y-6 text-emerald-900">
-          <div class="grid gap-6 items-stretch xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <div class="flex h-full items-start gap-5">
-              <div class="hidden sm:flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-200/70 text-emerald-700 shadow-inner">
+          <div class="grid gap-6 items-stretch lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div class="flex h-full flex-col gap-5 sm:flex-row sm:items-start">
+              <div class="hidden shrink-0 sm:flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-200/70 text-emerald-700 shadow-inner md:h-20 md:w-20">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-10 w-10">
                   <path d="M6 2a1 1 0 0 1 1 1v1h10V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm14 6H4v11h16V8zM4 6h16V5h-1v1a1 1 0 1 1-2 0V5H7v1a1 1 0 1 1-2 0V5H4v1z" />
                 </svg>
               </div>
               <div class="space-y-3">
-                <p class="text-3xl font-semibold uppercase tracking-[0.45em] text-emerald-700 md:text-4xl">Kalender Digital</p>
-                <h1 class="text-3xl font-semibold leading-tight text-emerald-900 md:text-4xl">Pengadilan Tinggi Agama Surabaya</h1>
-                <p class="max-w-2xl text-base text-emerald-700 md:text-lg">Jadwal kegiatan terpusat dan transparan demi koordinasi yang rapi di setiap divisi.</p>
+                <p class="text-2xl font-semibold uppercase tracking-[0.35em] text-emerald-700 sm:text-3xl md:text-4xl">Kalender Digital</p>
+                <h1 class="text-2xl font-semibold leading-tight text-emerald-900 sm:text-3xl md:text-4xl">Pengadilan Tinggi Agama Surabaya</h1>
+                <p class="max-w-2xl text-sm text-emerald-700 sm:text-base md:text-lg">Jadwal kegiatan terpusat dan transparan demi koordinasi yang rapi di setiap divisi.</p>
               </div>
             </div>
 
-            <div v-if="user" class="flex h-full w-full max-w-xs flex-col items-center rounded-2xl border border-emerald-200 bg-white/90 px-5 py-5 text-center shadow-[0_15px_60px_-50px_rgba(16,185,129,0.6)] backdrop-blur-sm">
-              <div class="space-y-2">
-                <div class="text-xl font-semibold text-emerald-700">{{ user.name }}</div>
+            <div v-if="user" class="flex h-full w-full max-w-sm flex-col items-center rounded-2xl border border-emerald-200 bg-white/90 px-5 py-5 text-center shadow-[0_15px_60px_-50px_rgba(16,185,129,0.6)] backdrop-blur-sm sm:ml-auto">
+              <div class="space-y-2 text-center">
+                <div class="text-lg font-semibold text-emerald-700 sm:text-xl">{{ user.name }}</div>
               </div>
               <button
                 type="button"
-                class="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-emerald-300/40 transition hover:from-emerald-300 hover:via-emerald-400 hover:to-teal-300"
+                class="mt-5 inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-300/40 transition hover:from-emerald-300 hover:via-emerald-400 hover:to-teal-300"
                 @click="openProfileModal"
               >
                 Kelola Profil
@@ -399,7 +419,7 @@ async function performDelete(evt) {
             </div>
           </div>
 
-          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <button class="h-11 w-full rounded-xl border border-emerald-200 bg-white text-sm font-semibold text-emerald-600 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 active:scale-95" @click="currentDate = today">
               Hari Ini
             </button>
@@ -451,76 +471,83 @@ async function performDelete(evt) {
 
       
 
-      <!-- Calendar grid -->
-      <div class="relative rounded-3xl border border-emerald-100 bg-white p-6 shadow-lg transition-all duration-300 hover:shadow-[0_45px_120px_-60px_rgba(16,185,129,0.35)]">
-        <div class="relative flex items-center justify-center mb-3">
-          <button class="absolute left-0 inline-flex items-center justify-center h-12 w-12 rounded-full border border-emerald-200 bg-emerald-100 text-emerald-700 transition hover:bg-emerald-200 active:scale-95" @click="go(-1, 'month')" aria-label="Bulan sebelumnya">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7"><path d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
-          </button>
-          <div class="text-2xl md:text-3xl font-bold text-emerald-600 capitalize">{{ monthTitle }}</div>
-          <button class="absolute right-0 inline-flex items-center justify-center h-12 w-12 rounded-full border border-emerald-200 bg-emerald-100 text-emerald-700 transition hover:bg-emerald-200 active:scale-95" @click="go(1, 'month')" aria-label="Bulan berikutnya">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7"><path d="M8.25 4.5 15.75 12l-7.5 7.5"/></svg>
-          </button>
+      <div class="space-y-6">
+        <div class="relative rounded-3xl border border-emerald-100 bg-white p-4 shadow-lg transition-all duration-300 hover:shadow-[0_45px_120px_-60px_rgba(16,185,129,0.35)] sm:p-6">
+          <div class="relative mb-4 flex items-center justify-between gap-2">
+            <button class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-100 text-emerald-700 transition hover:bg-emerald-200 active:scale-95 sm:h-12 sm:w-12" @click="go(-1, 'month')" aria-label="Bulan sebelumnya">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7"><path d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
+            </button>
+            <div class="flex-1 text-center text-xl font-bold capitalize text-emerald-600 sm:text-2xl md:text-3xl">{{ monthTitle }}</div>
+            <button class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-100 text-emerald-700 transition hover:bg-emerald-200 active:scale-95 sm:h-12 sm:w-12" @click="go(1, 'month')" aria-label="Bulan berikutnya">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7"><path d="M8.25 4.5 15.75 12l-7.5 7.5"/></svg>
+            </button>
+          </div>
+          <div class="mb-4 text-center">
+            <div class="flex flex-wrap justify-center gap-2">
+              <label
+                v-for="d in divisionOptions" :key="d.id"
+                class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium cursor-pointer select-none transition shadow-sm"
+                :class="selectedDivisionIds.includes(d.id)
+                  ? 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 border-transparent text-white shadow-md'
+                  : 'bg-white text-emerald-600 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50'"
+              >
+                <input type="checkbox" :value="d.id" v-model="selectedDivisionIds" class="h-4 w-4 rounded-full border-emerald-200 text-emerald-500 focus:ring-emerald-400" />
+                <span>{{ d.name }}</span>
+              </label>
+            </div>
+          </div>
+          <div class="-mx-3 overflow-x-auto pb-2 sm:mx-0">
+            <div class="min-w-[680px] sm:min-w-0">
+              <MonthView
+                :date="currentDate"
+                :events="events"
+                :can-create="canCreate"
+                :can-edit="canEdit"
+                @select-day="d => { currentDate = d; selectedDay = d }"
+                @open-create="openCreate"
+                @open-edit="openEdit"
+              />
+            </div>
+          </div>
+          <LoadingOverlay v-if="loading" message="Memuat data..." />
         </div>
-        <div class="mb-4 text-center">
-          <div class="flex flex-wrap justify-center gap-2">
-            <label
-              v-for="d in divisionOptions" :key="d.id"
-              class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium cursor-pointer select-none transition shadow-sm"
-              :class="selectedDivisionIds.includes(d.id)
-                ? 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 border-transparent text-white shadow-md'
-                : 'bg-white text-emerald-600 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50'"
-            >
-              <input type="checkbox" :value="d.id" v-model="selectedDivisionIds" class="h-4 w-4 rounded-full border-emerald-200 text-emerald-500 focus:ring-emerald-400" />
-              <span>{{ d.name }}</span>
-            </label>
+
+        <div class="grid gap-6 lg:grid-cols-2">
+          <div class="relative rounded-3xl border border-emerald-100 bg-white p-4 shadow-lg transition-all duration-300 hover:shadow-[0_45px_120px_-60px_rgba(16,185,129,0.35)] sm:p-6">
+            <div class="mb-3 text-xl font-extrabold text-emerald-700 capitalize sm:text-2xl md:text-3xl">Kegiatan {{ selectedDayLabel }}</div>
+            <SidebarDayList
+              bare
+              :date="selectedDay || currentDate"
+              :events="events"
+              :can-edit="canEdit"
+              :can-delete="canDelete"
+              @open-edit="openEdit"
+              @delete-event="onDelete"
+            />
+            <LoadingOverlay v-if="loading" message="Memuat data..." />
+          </div>
+
+          <div class="relative rounded-3xl border border-emerald-100 bg-white p-4 shadow-lg transition-all duration-300 hover:shadow-[0_45px_120px_-60px_rgba(16,185,129,0.35)] sm:p-6">
+            <div class="px-1 py-1 text-xl font-extrabold text-emerald-700 capitalize sm:text-2xl md:text-3xl">
+              Timeline {{ selectedDayLabel }}
+            </div>
+            <div class="mt-4 -mx-3 overflow-x-auto pb-2 sm:mx-0">
+              <div class="min-w-[540px] sm:min-w-0">
+                <DayView
+                  :date="selectedDay || currentDate"
+                  :events="events"
+                  :start-hour="6"
+                  :end-hour="18"
+                  :can-create="canCreate"
+                  :can-edit="canEdit"
+                  @open-create="() => openCreate(selectedDay || currentDate)"
+                  @open-edit="openEdit"
+                />
+              </div>
+            </div>
+            <LoadingOverlay v-if="loading" message="Memuat data..." />
           </div>
         </div>
-        <MonthView
-          :date="currentDate"
-          :events="events"
-          :can-create="canCreate"
-          :can-edit="canEdit"
-          @select-day="d => { currentDate = d; selectedDay = d }"
-          @open-create="openCreate"
-          @open-edit="openEdit"
-        />
-        <LoadingOverlay v-if="loading" message="Memuat data..." />
-      </div>
-
-      <!-- Selected day's activities (single card) -->
-      <div class="relative rounded-3xl border border-emerald-100 bg-white p-6 shadow-lg transition-all duration-300 hover:shadow-[0_45px_120px_-60px_rgba(16,185,129,0.35)]">
-        <div class="mb-3 text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 bg-clip-text text-transparent">Kegiatan {{ selectedDay || currentDate }}</div>
-        <SidebarDayList
-          bare
-          :date="selectedDay || currentDate"
-          :events="events"
-          :can-edit="canEdit"
-          :can-delete="canDelete"
-          @open-edit="openEdit"
-          @delete-event="onDelete"
-        />
-        <LoadingOverlay v-if="loading" message="Memuat data..." />
-      </div>
-
-      <!-- Selected day's timeline 06:00 - 18:00 -->
-      <div class="relative rounded-3xl border border-emerald-100 bg-white p-6 shadow-lg transition-all duration-300 hover:shadow-[0_45px_120px_-60px_rgba(16,185,129,0.35)]">
-        <div class="px-2 py-1 text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 bg-clip-text text-transparent">
-          Timeline (06:00 - 18:00) - {{ selectedDay || currentDate }}
-        </div>
-        <div class="mt-4">
-          <DayView
-            :date="selectedDay || currentDate"
-            :events="events"
-            :start-hour="6"
-            :end-hour="18"
-            :can-create="canCreate"
-            :can-edit="canEdit"
-            @open-create="() => openCreate(selectedDay || currentDate)"
-            @open-edit="openEdit"
-          />
-        </div>
-        <LoadingOverlay v-if="loading" message="Memuat data..." />
       </div>
 
       <ProfileSettingsModal
@@ -547,6 +574,7 @@ async function performDelete(evt) {
         :date="selectedDay || currentDate"
         :event="editingEvent"
         :division-options="divisionOptions"
+        :participant-options="participantOptions"
         :can-edit="canEdit"
         :can-delete="canDelete"
         @close="showForm=false"

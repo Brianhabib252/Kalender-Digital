@@ -21,6 +21,7 @@ class UpdateEventRequest extends FormRequest
         return [
             'title' => ['sometimes','required','string','max:255'],
             'description' => ['nullable','string'],
+            'participant_summary' => ['nullable','string'],
             'location' => ['nullable','string','max:255'],
             'start_at' => ['sometimes','required','date'],
             'end_at' => ['sometimes','required','date','after:start_at'],
@@ -40,3 +41,4 @@ class UpdateEventRequest extends FormRequest
         ];
     }
 }
+

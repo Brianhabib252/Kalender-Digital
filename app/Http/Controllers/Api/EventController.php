@@ -115,6 +115,7 @@ class EventController extends Controller
                                 'location' => $e->location,
                                 'start_at' => $occStart->toIso8601String(),
                                 'end_at' => $occEnd->toIso8601String(),
+                                'participant_summary' => $e->participant_summary,
                                 'all_day' => (bool)$e->all_day,
                                 'divisions' => $e->divisions->map(fn($d)=>['id'=>$d->id,'name'=>$d->name])->all(),
                                 'participants' => $e->participantUsers->map(fn($u)=>[
@@ -165,6 +166,7 @@ class EventController extends Controller
                                 'location' => $e->location,
                                 'start_at' => $occStart->toIso8601String(),
                                 'end_at' => $occEnd->toIso8601String(),
+                                'participant_summary' => $e->participant_summary,
                                 'all_day' => (bool)$e->all_day,
                                 'divisions' => $e->divisions->map(fn($d)=>['id'=>$d->id,'name'=>$d->name])->all(),
                                 'participants' => $e->participantUsers->map(fn($u)=>[
@@ -197,7 +199,9 @@ class EventController extends Controller
 
         $data = $request->validated();
         $event = new Event();
-        $payload = Arr::only($data, ['title','description','location','start_at','end_at','all_day']);
+        $payload = Arr::only($data, ['title','description','participant_summary','location','start_at','end_at','all_day']);
+        $summary = isset($payload['participant_summary']) ? trim((string) $payload['participant_summary']) : null;
+        $payload['participant_summary'] = $summary !== '' ? $summary : null;
         $event->fill($payload);
         // Recurrence (store)
         if (!empty($data['recurrence_type'])) {
@@ -231,6 +235,7 @@ class EventController extends Controller
             $changes = [
                 'title' => [null, $event->title],
                 'description' => [null, $event->description],
+                'participant_summary' => [null, $event->participant_summary],
                 'location' => [null, $event->location],
                 'start_at' => [null, optional($event->start_at)->toIso8601String()],
                 'end_at' => [null, optional($event->end_at)->toIso8601String()],
@@ -258,10 +263,14 @@ class EventController extends Controller
 
         $data = $request->validated();
         // Keep originals for diff
-        $original = $event->only(['title','description','location','start_at','end_at','all_day','recurrence_type','recurrence_rule','recurrence_until']);
+        $original = $event->only(['title','description','participant_summary','location','start_at','end_at','all_day','recurrence_type','recurrence_rule','recurrence_until']);
         $origDivIds = $event->divisions()->pluck('divisions.id')->all();
         $origPartIds = $event->participantUsers()->pluck('users.id')->all();
-        $payload = Arr::only($data, ['title','description','location','start_at','end_at','all_day']);
+        $payload = Arr::only($data, ['title','description','participant_summary','location','start_at','end_at','all_day']);
+        if (array_key_exists('participant_summary', $payload)) {
+            $summary = trim((string) ($payload['participant_summary'] ?? ''));
+            $payload['participant_summary'] = $summary !== '' ? $summary : null;
+        }
         $event->fill($payload);
         // Recurrence (update)
         if ($request->has('recurrence_type')) {
@@ -294,7 +303,7 @@ class EventController extends Controller
 
         // Log update
         if (Schema::hasTable('event_change_logs')) {
-            $now = $event->only(['title','description','location','start_at','end_at','all_day','recurrence_type','recurrence_rule','recurrence_until']);
+            $now = $event->only(['title','description','participant_summary','location','start_at','end_at','all_day','recurrence_type','recurrence_rule','recurrence_until']);
             // normalize datetimes/booleans
             $normalize = function ($k, $v) {
                 if ($k === 'start_at' || $k === 'end_at') return optional($v)->toIso8601String();
@@ -335,6 +344,7 @@ class EventController extends Controller
         $snapshot = [
             'title' => $event->title,
             'description' => $event->description,
+              'participant_summary' => $event->participant_summary,
             'location' => $event->location,
             'start_at' => optional($event->start_at)->toIso8601String(),
             'end_at' => optional($event->end_at)->toIso8601String(),
@@ -365,3 +375,10 @@ class EventController extends Controller
         return response()->noContent();
     }
 }
+
+
+
+
+
+
+

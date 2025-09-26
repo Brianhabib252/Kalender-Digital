@@ -20,9 +20,9 @@ const colorClass = computed(() => {
 </script>
 
 <template>
-  <div :class="'px-3 py-1.5 text-sm rounded-md truncate cursor-pointer ring-1 ring-inset hover:opacity-90 transition transform-gpu duration-200 hover:scale-[1.02] active:scale-95 ' + colorClass">
-    <span v-if="!event.all_day" class="font-mono text-[10px] mr-1 opacity-80">{{ event.start_at?.slice(11,16) }}-{{ event.end_at?.slice(11,16) }}</span>
-    <span class="font-medium">{{ event.title }}</span>
+  <div :class="'px-3 py-1.5 text-xs rounded-md truncate cursor-pointer ring-1 ring-inset hover:opacity-90 transition transform-gpu duration-200 hover:scale-[1.02] active:scale-95 ' + colorClass">
+    <span class="font-semibold">{{ event.title }}</span>
+    <span v-if="!event.all_day" class="font-mono text-[10px] ml-2 opacity-80">{{ event.start_at?.slice(11,16) }}-{{ event.end_at?.slice(11,16) }}</span>
   </div>
 </template>
 
