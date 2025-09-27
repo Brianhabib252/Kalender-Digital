@@ -2,15 +2,20 @@
 import { computed } from 'vue'
 import DayCell from './DayCell.vue'
 import EventChip from './EventChip.vue'
+import { gregorianToHijri, hijriMonthRange } from '../../lib/hijri.js'
 
 const props = defineProps({
   date: { type: String, required: true },
   events: { type: Array, default: () => [] },
   canCreate: { type: Boolean, default: true },
   canEdit: { type: Boolean, default: true },
+  calendarSystem: { type: String, default: 'gregorian' },
 })
 
 const emit = defineEmits(['select-day','open-create','open-edit'])
+
+const isHijri = computed(() => props.calendarSystem === 'hijri')
+const baseHijri = computed(() => (isHijri.value ? gregorianToHijri(parseYMD(props.date)) : null))
 
 function startOfWeek(d) {
   const x = new Date(d); const day = (x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x
@@ -43,18 +48,26 @@ function handleOpenEdit(event) {
 
 const weeks = computed(() => {
   const base = parseYMD(props.date)
-  const sm = startOfMonth(base)
-  const em = endOfMonth(base)
-  const gridStart = startOfWeek(sm)
-  const gridEnd = endOfWeek(em)
+  let gridStart
+  let gridEnd
+  if (isHijri.value) {
+    const range = hijriMonthRange(base)
+    gridStart = startOfWeek(range.start)
+    gridEnd = endOfWeek(range.end)
+  } else {
+    const sm = startOfMonth(base)
+    const em = endOfMonth(base)
+    gridStart = startOfWeek(sm)
+    gridEnd = endOfWeek(em)
+  }
   const days = []
   const cursor = new Date(gridStart)
   while (cursor <= gridEnd) {
     days.push(new Date(cursor))
-    cursor.setDate(cursor.getDate()+1)
+    cursor.setDate(cursor.getDate() + 1)
   }
   const rows = []
-  for (let i=0; i<days.length; i+=7) rows.push(days.slice(i,i+7))
+  for (let i = 0; i < days.length; i += 7) rows.push(days.slice(i, i + 7))
   return rows
 })
 
@@ -69,8 +82,32 @@ function eventsOfDay(d) {
 }
 
 function isToday(d) { const t = new Date(); return ymd(d) === ymd(t) }
-function isCurrentMonth(d) { return parseYMD(props.date).getMonth() === d.getMonth() }
+function isCurrentMonth(d) {
+  if (!isHijri.value) {
+    return parseYMD(props.date).getMonth() === d.getMonth()
+  }
+  const info = baseHijri.value
+  if (!info) return false
+  const dayInfo = gregorianToHijri(d)
+  return dayInfo.year === info.year && dayInfo.month === info.month
+}
 function isWeekend(d) { const g = d.getDay(); return g === 0 || g === 6 }
+
+function primaryDayNumber(d) {
+  if (isHijri.value) {
+    return gregorianToHijri(d).day
+  }
+  return d.getDate()
+}
+
+function formatGregorianLabel(d) {
+  try {
+    return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
+  } catch {
+    return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
+  }
+}
+
 </script>
 
 <template>
@@ -100,6 +137,12 @@ function isWeekend(d) { const g = d.getDay(); return g === 0 || g === 6 }
                   + Buat
                 </button>
                 <div
+                  v-if="isHijri"
+                  class="absolute right-0 top-7 text-right text-[10px] font-semibold uppercase tracking-wide text-emerald-500 sm:text-xs"
+                >
+                  {{ formatGregorianLabel(d) }}
+                </div>
+                <div
                   v-if="eventsOfDay(d).length === 0"
                   :class="[
                     'select-none text-4xl font-extrabold leading-none sm:text-5xl',
@@ -109,7 +152,9 @@ function isWeekend(d) { const g = d.getDay(); return g === 0 || g === 6 }
                         ? 'text-gray-300'
                         : (isWeekend(d) ? 'text-red-600' : 'text-gray-700'))
                   ]"
-                >{{ d.getDate() }}</div>
+                >
+                  <span>{{ primaryDayNumber(d) }}</span>
+                </div>
                 <div
                   v-else
                   :class="[
@@ -122,7 +167,7 @@ function isWeekend(d) { const g = d.getDay(); return g === 0 || g === 6 }
                           ? 'text-red-600 border-red-200 bg-red-50/30'
                           : 'text-gray-700 border-gray-200'))
                   ]"
-                >{{ d.getDate() }}</div>
+                >{{ primaryDayNumber(d) }}</div>
               </div>
             </template>
             <div class="mt-1 space-y-1">

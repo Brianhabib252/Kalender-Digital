@@ -9,9 +9,12 @@ const props = defineProps({
   endHour: { type: Number, default: 23 },
   canCreate: { type: Boolean, default: true },
   canEdit: { type: Boolean, default: true },
+  displayLabel: { type: String, default: '' },
 })
 
 const emit = defineEmits(['open-create','open-edit'])
+
+const headerLabel = computed(() => props.displayLabel || props.date)
 
 function parseLocalDate(str) {
   if (!str) return new Date(NaN)
@@ -131,7 +134,7 @@ function handleOpenEdit(event) {
       </div>
       <div class="relative flex-1 overflow-hidden rounded-xl border bg-white">
         <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-emerald-50/70 px-3 py-3 sm:px-4">
-          <div class="text-sm font-bold text-emerald-700 sm:text-base md:text-lg">{{ date }}</div>
+          <div class="text-sm font-bold text-emerald-700 sm:text-base md:text-lg">{{ headerLabel }}</div>
           <button
             class="h-9 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 sm:h-10 sm:px-4"
             :disabled="!props.canCreate"
