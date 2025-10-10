@@ -1,0 +1,403 @@
+<script setup>
+import { computed, ref, watch } from 'vue'
+import ConfirmPopup from '../ui/ConfirmPopup.vue'
+
+const props = defineProps({
+  date: { type: String, required: true },
+  event: { type: Object, default: null },
+  divisionOptions: { type: Array, default: () => [] },
+  canEdit: { type: Boolean, default: true },
+  canDelete: { type: Boolean, default: true },
+})
+const emit = defineEmits(['close', 'saved', 'failed', 'deleted'])
+
+const title = ref('')
+const description = ref('')
+const location = ref('')
+const allDay = ref(false)
+const startTime = ref('09:00')
+const endTime = ref('10:00')
+const divisionIds = ref([])
+const participantIdsCsv = ref('')
+
+// Recurrence state
+const recurrenceEnabled = ref(false)
+const recurrenceType = ref('weekly') // 'weekly' | 'monthly'
+const recurrenceInterval = ref(1)
+const recurrenceDays = ref([]) // 1..7 (Senin=1..Minggu=7)
+const recurrenceMonthDay = ref(1)
+const recurrenceUntil = ref('')
+
+watch(() => props.event, (e) => {
+  if (e) {
+    title.value = e.title || ''
+    description.value = e.description || ''
+    location.value = e.location || ''
+    allDay.value = !!e.all_day
+    if (e.start_at)
+      startTime.value = e.start_at.slice(11, 16)
+    if (e.end_at)
+      endTime.value = e.end_at.slice(11, 16)
+    divisionIds.value = (e.divisions || []).map(x => x.id)
+    const summaryText = typeof e.participant_summary === 'string' ? e.participant_summary : ''
+    if (summaryText.trim()) {
+      participantIdsCsv.value = summaryText
+    }
+    else {
+      participantIdsCsv.value = (e.participants || [])
+        .map(x => x?.name || x?.email || (x?.id != null ? `ID ${x.id}` : ''))
+        .filter(Boolean)
+        .join(', ')
+    }
+    recurrenceEnabled.value = false
+  }
+  else {
+    title.value = ''
+    description.value = ''
+    location.value = ''
+    allDay.value = false
+    startTime.value = '09:00'
+    endTime.value = '10:00'
+    divisionIds.value = []
+    participantIdsCsv.value = ''
+    recurrenceEnabled.value = false
+    recurrenceType.value = 'weekly'
+    recurrenceInterval.value = 1
+    recurrenceDays.value = []
+    recurrenceMonthDay.value = 1
+    recurrenceUntil.value = ''
+  }
+}, { immediate: true })
+
+const isEdit = computed(() => !!props.event?.id)
+
+const saving = ref(false)
+const showDeleteConfirm = ref(false)
+
+async function submit() {
+  if (saving.value)
+    return
+  if (formReadOnly.value)
+    return
+  saving.value = true
+  await ensureSanctumCookie()
+  const payload = {
+    title: title.value,
+    description: description.value || null,
+    location: location.value || null,
+    start_at: allDay.value ? (`${props.date}T07:30:00`) : (`${props.date}T${startTime.value}:00`),
+    end_at: allDay.value ? (`${props.date}T16:00:00`) : (`${props.date}T${endTime.value}:00`),
+    all_day: false,
+    division_ids: divisionIds.value,
+  }
+  const participants = participantIdsCsv.value.split(',').map(s => Number.parseInt(s.trim(), 10)).filter(Boolean)
+  if (participants.length > 0)
+    payload.participant_user_ids = participants
+
+  const summaryText = participantIdsCsv.value.trim()
+  payload.participant_summary = summaryText || null
+
+  if (recurrenceEnabled.value) {
+    payload.recurrence_type = recurrenceType.value
+    payload.recurrence_interval = Number(recurrenceInterval.value) || 1
+    if (recurrenceType.value === 'weekly') {
+      payload.recurrence_days = recurrenceDays.value
+    }
+    else if (recurrenceType.value === 'monthly') {
+      payload.recurrence_month_days = [Number(recurrenceMonthDay.value) || 1]
+    }
+    if (recurrenceUntil.value)
+      payload.recurrence_until = recurrenceUntil.value
+  }
+
+  const url = isEdit.value ? `/api/events/${props.event.id}` : '/api/events'
+  const method = isEdit.value ? 'PUT' : 'POST'
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+  const res = await fetch(url, {
+    method,
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
+      ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    if ([401, 403, 419].includes(res.status)) {
+      saving.value = false
+      emit('failed', 'Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
+      return
+    }
+    const message = await toErrorMessage(res, 'Gagal menyimpan kegiatan')
+    saving.value = false
+    emit('failed', message)
+    return
+  }
+  saving.value = false
+  emit('saved', isEdit.value ? 'updated' : 'created')
+}
+
+const deleting = ref(false)
+const formReadOnly = computed(() => !props.canEdit)
+
+let sanctumBootstrapped = false
+
+async function ensureSanctumCookie() {
+  if (sanctumBootstrapped)
+    return
+  await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+  sanctumBootstrapped = true
+}
+
+function xsrfToken() {
+  const value = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('XSRF-TOKEN='))
+    ?.split('=')[1]
+
+  return value ? decodeURIComponent(value) : ''
+}
+
+const deleteConfirmMessage = computed(() => {
+  const titleValue = props.event?.title
+  return titleValue
+    ? `Kegiatan "${titleValue}" akan dihapus dari kalender.`
+    : 'Kegiatan akan dihapus dari kalender dan tidak dapat dikembalikan.'
+})
+
+function requestDelete() {
+  if (!isEdit.value)
+    return
+  if (deleting.value)
+    return
+  if (formReadOnly.value || !props.canDelete)
+    return
+  showDeleteConfirm.value = true
+}
+
+function cancelDelete() {
+  if (deleting.value)
+    return
+  showDeleteConfirm.value = false
+}
+
+async function confirmDelete() {
+  if (deleting.value)
+    return
+  showDeleteConfirm.value = false
+  await performDelete()
+}
+
+async function toErrorMessage(response, fallback = 'Terjadi kesalahan') {
+  if (!response)
+    return fallback
+  try {
+    const data = await response.clone().json()
+    if (data?.errors) {
+      const merged = Object.values(data.errors).flat().filter(Boolean)
+      if (merged.length)
+        return merged.join('\n')
+    }
+    if (typeof data?.message === 'string' && data.message.trim()) {
+      return data.message
+    }
+  }
+  catch {
+    // ignore JSON parsing issues
+  }
+  try {
+    const text = await response.text()
+    if (text)
+      return text
+  }
+  catch {
+    // ignore text parsing issues
+  }
+  return fallback
+}
+
+async function performDelete() {
+  if (!isEdit.value)
+    return
+  if (deleting.value)
+    return
+  deleting.value = true
+  await ensureSanctumCookie()
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+  const res = await fetch(`/api/events/${props.event.id}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: {
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
+      ...(xsrfToken() ? { 'X-XSRF-TOKEN': xsrfToken() } : {}),
+    },
+  })
+  if (!res.ok) {
+    if ([401, 403, 419].includes(res.status)) {
+      deleting.value = false
+      emit('failed', 'Anda tidak memiliki akses untuk mengubah atau menghapus data ini')
+      return
+    }
+    const message = await toErrorMessage(res, 'Gagal menghapus kegiatan')
+    deleting.value = false
+    emit('failed', message)
+    return
+  }
+  deleting.value = false
+  emit('deleted')
+}
+</script>
+
+<template>
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="w-full max-w-2xl bg-white rounded-2xl shadow-xl border max-h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b">
+        <div class="text-lg font-semibold text-gray-800">
+          {{ isEdit ? 'Ubah Kegiatan' : 'Tambahkan Kegiatan' }}
+        </div>
+        <button
+          type="button"
+          class="px-3 py-1.5 rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          @click="$emit('close')"
+        >
+          Tutup
+        </button>
+      </div>
+      <div class="space-y-4 p-5 overflow-y-auto flex-1">
+        <div>
+          <label class="block text-sm mb-1 text-gray-700">Judul</label>
+          <input
+            v-model="title"
+            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 disabled:bg-gray-100"
+            :readonly="formReadOnly"
+            :disabled="formReadOnly"
+          >
+        </div>
+        <div class="grid grid-cols-2 gap-3 items-end">
+          <div>
+            <label class="block text-sm mb-1 text-gray-700">Tanggal</label>
+            <input type="date" :value="date" disabled class="w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-600">
+          </div>
+          <label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="allDay" type="checkbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" :disabled="formReadOnly"> <span>Sepanjang hari</span></label>
+          <div>
+            <label class="block text-sm mb-1 text-gray-700">Mulai</label>
+            <input v-model="startTime" type="time" :disabled="allDay || formReadOnly" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100">
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-700">Selesai</label>
+            <input v-model="endTime" type="time" :disabled="allDay || formReadOnly" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm mb-1 text-gray-700">Lokasi</label>
+          <input v-model="location" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" :readonly="formReadOnly" :disabled="formReadOnly">
+        </div>
+        <div>
+          <label class="block text-sm mb-1 text-gray-700">Deskripsi</label>
+          <textarea v-model="description" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" rows="3" :readonly="formReadOnly" :disabled="formReadOnly" />
+        </div>
+        <div>
+          <label class="block text-sm mb-1 text-gray-700">Divisi Terlibat</label>
+          <div class="flex flex-wrap gap-3">
+            <label v-for="d in divisionOptions" :key="d.id" class="flex items-center gap-2">
+              <input v-model="divisionIds" type="checkbox" :value="d.id" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" :disabled="formReadOnly">
+              <span>{{ d.name }}</span>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm mb-1 text-gray-700">Nama Peserta (Pisahkan dengan koma)</label>
+          <input v-model="participantIdsCsv" placeholder="cth: Budi, Adit, Dina" class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100" :readonly="formReadOnly" :disabled="formReadOnly">
+        </div>
+
+        <div class="border-t pt-3">
+          <div class="flex items-center justify-between">
+            <label class="text-sm font-medium text-gray-700">Pengulangan</label>
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input v-model="recurrenceEnabled" type="checkbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" :disabled="formReadOnly"> Aktif
+            </label>
+          </div>
+          <div v-if="recurrenceEnabled" class="mt-3 space-y-3" :class="formReadOnly ? 'opacity-60 pointer-events-none' : ''">
+            <div class="flex items-center gap-3 flex-wrap">
+              <label class="text-sm">Tipe</label>
+              <select v-model="recurrenceType" class="border rounded-lg px-2 py-1" :disabled="formReadOnly">
+                <option value="weekly">
+                  Mingguan
+                </option>
+                <option value="monthly">
+                  Bulanan
+                </option>
+              </select>
+              <label class="text-sm">Interval</label>
+              <input v-model.number="recurrenceInterval" type="number" min="1" class="w-20 border rounded-lg px-2 py-1" :disabled="formReadOnly">
+              <span v-if="recurrenceType === 'weekly'" class="text-xs text-gray-500">(setiap n minggu)</span>
+              <span v-else class="text-xs text-gray-500">(setiap n bulan)</span>
+            </div>
+            <div v-if="recurrenceType === 'weekly'">
+              <div class="text-sm text-gray-700 mb-1">
+                Pilih hari
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <label v-for="(nm, idx) in ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']" :key="idx" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none">
+                  <input v-model="recurrenceDays" type="checkbox" :value="idx + 1" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" :disabled="formReadOnly">
+                  <span>{{ nm }}</span>
+                </label>
+              </div>
+            </div>
+            <div v-else>
+              <div class="text-sm text-gray-700 mb-1">
+                Tanggal setiap bulan
+              </div>
+              <input v-model.number="recurrenceMonthDay" type="number" min="1" max="31" class="w-24 border rounded-lg px-2 py-1" :disabled="formReadOnly">
+            </div>
+            <div>
+              <label class="block text-sm mb-1 text-gray-700">Sampai tanggal (opsional)</label>
+              <input v-model="recurrenceUntil" type="date" class="border rounded-lg px-2 py-1" :disabled="formReadOnly">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="px-5 py-4 border-t flex items-center justify-between gap-2">
+        <button
+          v-if="isEdit && props.canDelete"
+          class="px-4 py-2 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="formReadOnly || deleting"
+          @click="requestDelete"
+        >
+          {{ deleting ? 'Menghapus...' : 'Hapus' }}
+        </button>
+        <div class="ml-auto flex items-center gap-2">
+          <button class="px-4 py-2 rounded-lg border hover:bg-gray-50 active:scale-95 transition" @click="$emit('close')">
+            Batal
+          </button>
+          <button
+            :disabled="saving || formReadOnly"
+            class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            @click="submit"
+          >
+            <span v-if="saving" class="inline-block h-4 w-4 border-2 border-current border-r-transparent rounded-full animate-spin" />
+            <span>Simpan</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <ConfirmPopup
+      :visible="showDeleteConfirm"
+      title="Hapus kegiatan ini?"
+      :message="deleteConfirmMessage"
+      confirm-text="Hapus"
+      cancel-text="Batal"
+      :loading="deleting"
+      @cancel="cancelDelete"
+      @confirm="confirmDelete"
+    />
+  </div>
+</template>
+
+<style scoped>
+</style>

@@ -9,7 +9,7 @@ import Input from '@/components/ui/input/Input.vue'
 import Label from '@/components/ui/label/Label.vue'
 import { useSeoMetaTags } from '@/composables/useSeoMetaTags.js'
 
-const props = defineProps({
+defineProps({
   canResetPassword: Boolean,
   status: String,
 })
@@ -51,7 +51,9 @@ useSeoMetaTags({
               <span class="flex items-center justify-center">
                 <AuthenticationCardLogo />
               </span>
-              <p class="text-4xl font-bold uppercase tracking-[0.55em] text-emerald-600 md:text-5xl">Kalender Digital</p>
+              <p class="text-4xl font-bold uppercase tracking-[0.55em] text-emerald-600 md:text-5xl">
+                Kalender Digital
+              </p>
             </div>
             <p class="text-base text-emerald-800/85 md:text-lg">
               Kelola agenda lembaga, lihat timeline harian, dan pantau keterlibatan divisi dalam satu tampilan yang konsisten.
@@ -60,8 +62,12 @@ useSeoMetaTags({
         </section>
         <section class="rounded-3xl border border-emerald-100 bg-white p-8 text-slate-700 shadow-xl">
           <header class="space-y-1">
-            <h2 class="text-2xl font-semibold text-slate-900">Masuk ke akun</h2>
-            <p class="text-sm text-slate-500">Gunakan kredensial internal Anda untuk melanjutkan.</p>
+            <h2 class="text-2xl font-semibold text-slate-900">
+              Masuk ke akun
+            </h2>
+            <p class="text-sm text-slate-500">
+              Gunakan kredensial internal Anda untuk melanjutkan.
+            </p>
           </header>
 
           <div v-if="status" class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
@@ -133,4 +139,3 @@ useSeoMetaTags({
     </div>
   </main>
 </template>
-

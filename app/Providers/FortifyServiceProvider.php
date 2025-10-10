@@ -10,11 +10,14 @@ use Illuminate\Http\Request;
 use Laravel\Fortify\Fortify;
 use Illuminate\Support\Facades\Route;
 use App\Actions\Fortify\CreateNewUser;
+use App\Models\User;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use App\Actions\User\ActiveOauthProviderAction;
 use App\Actions\Fortify\UpdateUserProfileInformation;
 
@@ -37,6 +40,33 @@ final class FortifyServiceProvider extends ServiceProvider
         Fortify::updateUserProfileInformationUsing(UpdateUserProfileInformation::class);
         Fortify::updateUserPasswordsUsing(UpdateUserPassword::class);
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
+        Fortify::authenticateUsing(function (Request $request): ?User {
+            $email = (string) $request->string(Fortify::username());
+            $user = User::query()->where('email', $email)->first();
+
+            if (! $user) {
+                return null;
+            }
+
+            $hashedPassword = $user->password;
+            $plainPassword = (string) $request->input('password');
+
+            if (! is_string($hashedPassword) || $hashedPassword === '' || $plainPassword === '') {
+                return null;
+            }
+
+            if (! Hash::check($plainPassword, $hashedPassword)) {
+                return null;
+            }
+
+            if ($user->isInactive()) {
+                throw ValidationException::withMessages([
+                    Fortify::username() => 'Mohon Maaf Akun Anda Belum di Aktifkan, Mohon Hubungi Admin Untuk Mengaktifkan Akun',
+                ]);
+            }
+
+            return $user;
+        });
 
         RateLimiter::for('login', function (Request $request) {
             $throttleKey = Str::transliterate(Str::lower((string) $request->string(Fortify::username())).'|'.$request->ip());

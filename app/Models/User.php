@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\DatabaseNotificationCollection;
@@ -92,6 +93,7 @@ use function Illuminate\Events\queueable;
  */
 final class User extends Authenticatable implements FilamentUser
 {
+    public const ROLE_INACTIVE = 'inactive';
     public const ROLE_ADMIN = 'admin';
     public const ROLE_EDITOR = 'editor';
     public const ROLE_VIEWER = 'viewer';
@@ -128,6 +130,11 @@ final class User extends Authenticatable implements FilamentUser
         return $this->role === self::ROLE_ADMIN;
     }
 
+    public function isInactive(): bool
+    {
+        return $this->role === self::ROLE_INACTIVE;
+    }
+
     public function isEditor(): bool
     {
         return $this->role === self::ROLE_EDITOR;
@@ -162,6 +169,11 @@ final class User extends Authenticatable implements FilamentUser
     public function ownedTeams(): HasMany
     {
         return $this->ownedTeamsBase();
+    }
+
+    public function division(): BelongsTo
+    {
+        return $this->belongsTo(Division::class);
     }
 
     /**

@@ -23,6 +23,7 @@ php artisan db:seed --class=\Database\Seeders\DivisionSeeder
 ```
 
 Tabel yang dibuat:
+
 - `divisions`, `events`, `event_participants`, `event_divisions`
 - `users` akan ditambahkan kolom `division_id` (nullable)
 
@@ -41,6 +42,7 @@ require __DIR__.'/api_calendar.php';
 ```
 
 Endpoint API yang tersedia:
+
 - `GET /api/events?start=ISO&end=ISO&division[]=ID&q=...`
 - `POST /api/events`
 - `PUT /api/events/{id}`
@@ -51,6 +53,7 @@ Endpoint API yang tersedia:
 Halaman utama kalender: buka `GET /calendar`.
 
 Komponen inti berada di:
+
 - `resources/js/Pages/Calendar/Index.vue`
 - `resources/js/Components/Calendar/*`
 
@@ -70,4 +73,3 @@ Saat ini controller API memperbolehkan akses tanpa policy khusus. Sesuaikan `aut
 - Pencarian (param `q`) dan filter divisi sudah didukung di endpoint `GET /api/events`.
 - Form peserta masih berupa input ID (CSV). Anda bisa menghubungkan autocomplete user sesuai library yang tersedia di proyek.
 - Untuk perulangan jadwal (RRULE) belum dibuat—masuk ke roadmap.
-

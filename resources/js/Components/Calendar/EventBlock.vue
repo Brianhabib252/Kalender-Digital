@@ -1,23 +1,44 @@
 <script setup>
-const props = defineProps({ event: Object })
+const { event } = defineProps({
+  event: {
+    type: Object,
+    required: true,
+  },
+})
 
-function pad(n){ return String(n).padStart(2,'0') }
-function parseLocalDate(str){
-  const m = str && str.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/)
-  if (m){ const [,y,mo,d,h,mi,s]=m; return new Date(+y, +mo-1, +d, +h, +mi, +(s||0)) }
-  return new Date(str)
+function pad(value) {
+  return String(value).padStart(2, '0')
 }
-function fmtHM(str){
-  const dt = parseLocalDate(str)
-  if (isNaN(dt)) return ''
-  return pad(dt.getHours()) + ':' + pad(dt.getMinutes())
+
+function parseLocalDate(raw) {
+  if (!raw)
+    return new Date(Number.NaN)
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/)
+  if (match) {
+    const [, year, month, day, hours, minutes, seconds] = match
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hours),
+      Number(minutes),
+      Number(seconds || '0'),
+    )
+  }
+  return new Date(raw)
+}
+
+function fmtHM(raw) {
+  const dt = parseLocalDate(raw)
+  if (Number.isNaN(dt.getTime()))
+    return ''
+  return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`
 }
 </script>
 
 <template>
   <div
-    class="absolute rounded-xl text-white text-sm p-3 overflow-hidden cursor-pointer shadow-md transition transform-gpu duration-200 hover:shadow-xl hover:scale-[1.01] active:scale-95 flex items-center justify-center text-center"
-    :class="['bg-gradient-to-r from-emerald-500 to-green-500 ring-1 ring-emerald-400/50']"
+    class="absolute rounded-xl text-white text-sm p-3 overflow-hidden cursor-pointer shadow-md transition transform-gpu duration-200 hover:shadow-xl hover:scale-[1.01] active:scale-95 flex items-center justify-center text-center bg-gradient-to-r from-emerald-500 to-green-500 ring-1 ring-emerald-400/50"
   >
     <div class="truncate whitespace-nowrap">
       <span class="font-semibold">{{ event.title }}</span>

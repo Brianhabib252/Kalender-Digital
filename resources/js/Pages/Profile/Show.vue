@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
+import { computed, ref } from 'vue'
+import ProfileQuickModal from '@/Components/Profile/ProfileQuickModal.vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import DeleteUserForm from '@/Pages/Profile/Partials/DeleteUserForm.vue'
 import LinkedAccountsForm from '@/Pages/Profile/Partials/LinkedAccountsForm.vue'
@@ -8,11 +9,6 @@ import LogoutOtherBrowserSessionsForm from '@/Pages/Profile/Partials/LogoutOther
 import TwoFactorAuthenticationForm from '@/Pages/Profile/Partials/TwoFactorAuthenticationForm.vue'
 import UpdatePasswordForm from '@/Pages/Profile/Partials/UpdatePasswordForm.vue'
 import UpdateProfileInformationForm from '@/Pages/Profile/Partials/UpdateProfileInformationForm.vue'
-import ProfileQuickModal from '@/Components/Profile/ProfileQuickModal.vue'
-
-const page = usePage()
-const user = computed(() => page.props.auth?.user ?? {})
-const summaryOpen = ref(false)
 
 defineProps({
   confirmsTwoFactorAuthentication: {
@@ -32,6 +28,9 @@ defineProps({
     default: () => [],
   },
 })
+const page = usePage()
+const user = computed(() => page.props.auth?.user ?? {})
+const summaryOpen = ref(false)
 </script>
 
 <template>
@@ -40,9 +39,13 @@ defineProps({
       <div class="rounded-3xl border border-emerald-100 bg-gradient-to-r from-emerald-100 via-emerald-50 to-white p-6 md:p-8 shadow-[0_35px_120px_-60px_rgba(16,185,129,0.35)]">
         <div class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div class="space-y-3 text-emerald-900">
-            <p class="text-xs uppercase tracking-[0.45em] text-emerald-500/90">Profil</p>
+            <p class="text-xs uppercase tracking-[0.45em] text-emerald-500/90">
+              Profil
+            </p>
             <div class="space-y-2">
-              <h1 class="text-2xl font-semibold md:text-3xl">Halo, {{ user?.name }}</h1>
+              <h1 class="text-2xl font-semibold md:text-3xl">
+                Halo, {{ user?.name }}
+              </h1>
               <p class="max-w-xl text-sm text-emerald-600/80">
                 Sesuaikan informasi diri, keamanan akun, dan perangkat yang terhubung agar pengalaman menggunakan kalender tetap konsisten.
               </p>
@@ -106,6 +109,5 @@ defineProps({
       />
     </section>
     <ProfileQuickModal v-if="summaryOpen" :user="user" @close="summaryOpen = false" />
-
   </AppLayout>
 </template>

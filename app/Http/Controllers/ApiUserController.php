@@ -86,7 +86,7 @@ final class ApiUserController extends Controller
             abort_unless($request->user() instanceof User && $request->user()->isAdmin(), 403);
 
             $validatedRole = $request->validate([
-                'role' => [Rule::in([User::ROLE_VIEWER, User::ROLE_EDITOR])],
+                'role' => [Rule::in([User::ROLE_INACTIVE, User::ROLE_VIEWER, User::ROLE_EDITOR])],
             ]);
 
             if ($user->email === User::ADMIN_EMAIL) {

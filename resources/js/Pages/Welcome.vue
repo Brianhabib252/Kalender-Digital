@@ -30,47 +30,47 @@ useSeoMetaTags(props.seo)
 
 const features = [
   {
-    icon: 'ðŸš€',
+    icon: 'lucide:rocket',
     title: '10x Dev Experience',
     description: 'Ship faster with opinionated Laravel Pint, maximum PHPStan level, and Rector for enhanced code quality and developer productivity.',
   },
   {
-    icon: 'ðŸ³',
+    icon: 'lucide:container',
     title: 'Production Docker Ready',
     description: 'Optimized Docker images with Laravel Octane for lightning-fast development and deployment.',
   },
   {
-    icon: 'ðŸ”‘',
+    icon: 'lucide:shield-check',
     title: 'Advanced Authentication',
     description: 'Complete authentication system with social login, and role-based access control.',
   },
   {
-    icon: 'ðŸ’³',
+    icon: 'lucide:credit-card',
     title: 'Payment Ready',
     description: 'Integrated Laravel Cashier for subscription billing and payment processing so you can focus on building your product.',
   },
   {
-    icon: 'ðŸŒ',
+    icon: 'lucide:server-cog',
     title: 'API Ready',
     description: 'RESTful API endpoints with Laravel Sanctum authentication and comprehensive documentation.',
   },
   {
-    icon: 'ðŸŽ¨',
+    icon: 'lucide:palette',
     title: 'Customizable UI',
     description: 'Built with shadcn/ui components, making UI customization a breeze. Easily modify themes, styles, and components to match your brand.',
   },
   {
-    icon: 'ðŸ§ ',
+    icon: 'lucide:bot',
     title: 'AI Integration Ready',
     description: 'Pre-configured LLM integrations for OpenAI, Anthropic, and more. Build AI-powered features into your app with minimal setup.',
   },
   {
-    icon: 'ðŸ“Š',
+    icon: 'lucide:layout-dashboard',
     title: 'FilamentPHP Admin',
     description: 'Beautiful admin panel powered by FilamentPHP with CRUD operations, charts, and detailed analytics.',
   },
   {
-    icon: 'âœ¨',
+    icon: 'lucide:refresh-cw',
     title: 'Evolving Features',
     description: 'This is just the beginning. Regular updates bring new features, integrations, and improvements to supercharge your development.',
   },
@@ -118,7 +118,7 @@ const githubUrl = 'https://github.com/shipfastlabs/larasonic-vue'
         <!-- Badge -->
         <div class="mb-8 inline-flex justify-center">
           <Badge variant="outline" class="rounded-full border bg-primary/10 px-4 py-1 text-xs sm:text-sm">
-            âœ¨ Using PHP 8.3+, Laravel 11, Inertia 2.0 and Tailwind CSS 4+
+            Built with PHP 8.3+, Laravel 11, Inertia 2.0, and Tailwind CSS 4+
           </Badge>
         </div>
 
@@ -201,7 +201,7 @@ const githubUrl = 'https://github.com/shipfastlabs/larasonic-vue'
     <!-- Features Grid -->
     <section id="features" class="container mx-auto px-4 py-16 sm:px-6 lg:px-8">
       <h2 class="text-center text-2xl font-bold tracking-tight sm:text-4xl">
-        Features âœ¨
+        Features
       </h2>
       <p class="mx-auto mt-4 max-w-2xl text-center text-muted-foreground">
         Everything you need to ship faste to production without any hassle.
@@ -233,7 +233,7 @@ const githubUrl = 'https://github.com/shipfastlabs/larasonic-vue'
         <!-- Header -->
         <div class="mx-auto max-w-3xl text-center">
           <h2 class="text-center text-2xl font-bold tracking-tight sm:text-4xl">
-            Proudly Open Source ðŸ¤‘
+            Proudly Open Source
           </h2>
           <p class="mx-auto mt-4 max-w-2xl text-center text-muted-foreground">
             Larasonic is and will always be open source. No hidden fees, no premium features.
@@ -297,7 +297,7 @@ const githubUrl = 'https://github.com/shipfastlabs/larasonic-vue'
             </h2>
             <p class="mx-auto mt-4 max-w-xl text-lg">
               You're already blazing fast with Laravel.<br> Larasonic is about to make your shipping speed
-              supersonic. ðŸš€
+              supersonic.
             </p>
             <div class="mt-8 flex justify-center gap-4">
               <Button as="a" :href="githubUrl" target="_blank" rel="noopener noreferrer">

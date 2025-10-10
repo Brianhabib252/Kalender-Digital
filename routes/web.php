@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\UserLogController;
+use App\Http\Controllers\Admin\CalendarHolidayController;
 use App\Http\Controllers\Admin\EventLogController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\DashboardController;
@@ -46,7 +47,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->group(fun
     Route::put('/admin/users/{user}', [UserManagementController::class, 'update'])->name('admin.users.update');
     Route::get('/admin/users/logs', [UserLogController::class, 'index'])->name('admin.users.logs');
     Route::get('/admin/events/logs', [EventLogController::class, 'index'])->name('admin.events.logs');
+    Route::post('/admin/holidays', [CalendarHolidayController::class, 'store'])->name('admin.holidays.store');
+    Route::delete('/admin/holidays/{holiday}', [CalendarHolidayController::class, 'destroy'])->name('admin.holidays.destroy');
 });
+
 
 // Add calendar routes
 require __DIR__.'/calendar.php';

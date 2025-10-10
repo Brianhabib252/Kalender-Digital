@@ -94,6 +94,6 @@ final class CreateNewUser implements CreatesNewUsers
     {
         return strcasecmp($email, User::ADMIN_EMAIL) === 0
             ? User::ROLE_ADMIN
-            : User::ROLE_VIEWER;
+            : User::ROLE_INACTIVE;
     }
 }

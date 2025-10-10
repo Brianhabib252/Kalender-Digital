@@ -1,3 +1,10 @@
+<script setup>
+const props = defineProps({
+  visible: { type: Boolean, default: false },
+  message: { type: String, default: 'Terjadi kesalahan' },
+})
+</script>
+
 <template>
   <transition name="fade-pop">
     <div
@@ -12,23 +19,20 @@
             <path class="error-x__line" fill="none" d="M34 18 L18 34" />
           </svg>
         </div>
-        <p class="text-lg font-semibold text-red-600">{{ message }}</p>
+        <p class="text-lg font-semibold text-red-600">
+          {{ message }}
+        </p>
       </div>
     </div>
   </transition>
 </template>
 
-<script setup>
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  message: { type: String, default: 'Terjadi kesalahan' },
-})
-</script>
-
 <style scoped>
 .fade-pop-enter-active,
 .fade-pop-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
 }
 .fade-pop-enter-from,
 .fade-pop-leave-to {
@@ -61,10 +65,14 @@ const props = defineProps({
 }
 
 @keyframes circle {
-  to { stroke-dashoffset: 0; }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 @keyframes check {
-  to { stroke-dashoffset: 0; }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 </style>

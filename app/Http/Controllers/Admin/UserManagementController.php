@@ -6,14 +6,15 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateManagedUserRequest;
+use App\Models\CalendarHoliday;
 use App\Models\User;
+use App\Models\UserChangeLog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Models\UserChangeLog;
 
 final class UserManagementController extends Controller
 {
@@ -25,9 +26,19 @@ final class UserManagementController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'nip', 'phone', 'role', 'created_at']);
 
+        $holidays = CalendarHoliday::query()
+            ->orderBy('calendar_type')
+            ->orderBy('gregorian_month')
+            ->orderBy('gregorian_day')
+            ->orderBy('hijri_month')
+            ->orderBy('hijri_day')
+            ->get(['id', 'name', 'calendar_type', 'gregorian_month', 'gregorian_day', 'gregorian_year', 'hijri_month', 'hijri_day', 'hijri_year']);
+
         return Inertia::render('Admin/Users/Index', [
             'users' => $users,
+            'holidays' => $holidays,
             'roles' => [
+                User::ROLE_INACTIVE,
                 User::ROLE_VIEWER,
                 User::ROLE_EDITOR,
                 User::ROLE_ADMIN,

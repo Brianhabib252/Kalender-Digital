@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  event: { type: Object, required: true }
+  event: { type: Object, required: true },
 })
 
 const palette = [
@@ -10,7 +10,7 @@ const palette = [
   'bg-emerald-100 text-emerald-800 ring-emerald-300',
   'bg-amber-100 text-amber-800 ring-amber-300',
   'bg-sky-100 text-sky-800 ring-sky-300',
-  'bg-rose-100 text-rose-800 ring-rose-300'
+  'bg-rose-100 text-rose-800 ring-rose-300',
 ]
 
 const colorClass = computed(() => {
@@ -20,9 +20,9 @@ const colorClass = computed(() => {
 </script>
 
 <template>
-  <div :class="'px-3 py-1.5 text-xs rounded-md truncate cursor-pointer ring-1 ring-inset hover:opacity-90 transition transform-gpu duration-200 hover:scale-[1.02] active:scale-95 ' + colorClass">
+  <div :class="`px-3 py-1.5 text-xs rounded-md truncate cursor-pointer ring-1 ring-inset hover:opacity-90 transition transform-gpu duration-200 hover:scale-[1.02] active:scale-95 ${colorClass}`">
     <span class="font-semibold">{{ event.title }}</span>
-    <span v-if="!event.all_day" class="font-mono text-[10px] ml-2 opacity-80">{{ event.start_at?.slice(11,16) }}-{{ event.end_at?.slice(11,16) }}</span>
+    <span v-if="!event.all_day" class="font-mono text-[10px] ml-2 opacity-80">{{ event.start_at?.slice(11, 16) }}-{{ event.end_at?.slice(11, 16) }}</span>
   </div>
 </template>
 

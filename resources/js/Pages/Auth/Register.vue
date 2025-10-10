@@ -50,23 +50,27 @@ function submit() {
               <AuthenticationCardLogo />
             </span>
             <div class="space-y-3">
-              <p class="text-xs uppercase tracking-[0.45em] text-emerald-500/90">Kalender Digital</p>
-              <h1 class="text-3xl font-semibold leading-tight md:text-4xl">Buat akun pengelola</h1>
+              <p class="text-xs uppercase tracking-[0.45em] text-emerald-500/90">
+                Kalender Digital
+              </p>
+              <h1 class="text-3xl font-semibold leading-tight md:text-4xl">
+                Buat akun pengelola
+              </h1>
               <p class="max-w-md text-sm text-emerald-800/80">
                 Personalisasi pengalaman kalender, tambahkan kegiatan, dan bagikan informasi antar divisi dengan mudah.
               </p>
             </div>
             <ul class="space-y-3 text-sm text-emerald-800/70">
               <li class="flex items-start gap-3">
-                <span class="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+                <span class="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
                 <span>Kelola jadwal lintas ruangan dengan pengingat yang konsisten.</span>
               </li>
               <li class="flex items-start gap-3">
-                <span class="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+                <span class="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
                 <span>Tandai peserta dan divisi agar semua pihak menerima informasi terbaru.</span>
               </li>
               <li class="flex items-start gap-3">
-                <span class="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+                <span class="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
                 <span>Analisis beban kerja dengan ringkasan mingguan dan bulanan.</span>
               </li>
             </ul>
@@ -75,13 +79,19 @@ function submit() {
             <svg class="h-6 w-6 text-emerald-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M6 4h12a2 2 0 0 1 2 2v13l-8-3-8 3V6a2 2 0 0 1 2-2z" fill="currentColor" />
             </svg>
-            <p class="max-w-xs leading-relaxed">Kalender digital dirancang dengan keamanan berlapis untuk melindungi data kegiatan instansi Anda.</p>
+            <p class="max-w-xs leading-relaxed">
+              Kalender digital dirancang dengan keamanan berlapis untuk melindungi data kegiatan instansi Anda.
+            </p>
           </div>
         </section>
         <section class="rounded-3xl border border-emerald-100 bg-white p-8 text-slate-700 shadow-xl">
           <header class="space-y-1">
-            <h2 class="text-2xl font-semibold text-slate-900">Daftar akun baru</h2>
-            <p class="text-sm text-slate-500">Lengkapi informasi berikut untuk mulai menggunakan kalender.</p>
+            <h2 class="text-2xl font-semibold text-slate-900">
+              Daftar akun baru
+            </h2>
+            <p class="text-sm text-slate-500">
+              Lengkapi informasi berikut untuk mulai menggunakan kalender.
+            </p>
           </header>
 
           <form class="mt-8 space-y-6" @submit.prevent="submit">
@@ -189,4 +199,3 @@ function submit() {
     </div>
   </main>
 </template>
-

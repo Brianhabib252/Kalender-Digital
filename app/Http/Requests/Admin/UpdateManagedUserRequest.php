@@ -24,7 +24,7 @@ final class UpdateManagedUserRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'nip' => ['nullable', 'string', 'max:30', Rule::unique('users', 'nip')->ignore($userId)],
             'phone' => ['nullable', 'string', 'max:30'],
-            'role' => ['required', Rule::in([User::ROLE_VIEWER, User::ROLE_EDITOR, User::ROLE_ADMIN])],
+            'role' => ['required', Rule::in([User::ROLE_INACTIVE, User::ROLE_VIEWER, User::ROLE_EDITOR, User::ROLE_ADMIN])],
             'password' => ['nullable', 'string', 'confirmed', 'min:8'],
             'password_confirmation' => ['nullable', 'string'],
         ];

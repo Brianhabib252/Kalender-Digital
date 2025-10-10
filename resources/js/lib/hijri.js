@@ -1,15 +1,15 @@
 const HIJRI_MONTH_NAMES = [
   'Muharram',
   'Safar',
-  "Rabi'ul Awal",
-  "Rabi'ul Akhir",
+  'Rabi\'ul Awal',
+  'Rabi\'ul Akhir',
   'Jumadil Awal',
   'Jumadil Akhir',
   'Rajab',
-  "Sya'ban",
+  'Sya\'ban',
   'Ramadan',
   'Syawal',
-  "Zulkaidah",
+  'Zulkaidah',
   'Zulhijjah',
 ]
 
@@ -32,15 +32,15 @@ export function gregorianToJulianDay(year, month, day) {
 }
 
 export function julianDayToGregorian(jd) {
-  let wjd = Math.floor(jd + 0.5)
-  let depoch = wjd - Math.floor(GREGORIAN_EPOCH)
-  let quadricent = Math.floor(depoch / 146097)
-  let dqc = mod(depoch, 146097)
-  let cent = Math.floor(dqc / 36524)
-  let dcent = mod(dqc, 36524)
-  let quad = Math.floor(dcent / 1461)
-  let dquad = mod(dcent, 1461)
-  let yindex = Math.floor(dquad / 365)
+  const wjd = Math.floor(jd + 0.5)
+  const depoch = wjd - Math.floor(GREGORIAN_EPOCH)
+  const quadricent = Math.floor(depoch / 146097)
+  const dqc = mod(depoch, 146097)
+  const cent = Math.floor(dqc / 36524)
+  const dcent = mod(dqc, 36524)
+  const quad = Math.floor(dcent / 1461)
+  const dquad = mod(dcent, 1461)
+  const yindex = Math.floor(dquad / 365)
   let year = quadricent * 400 + cent * 100 + quad * 4 + yindex
 
   if (!(cent === 4 || yindex === 4)) {
@@ -117,11 +117,13 @@ export function formatHijriDate(date, { withDayName = true } = {}) {
   const { day, month, year } = gregorianToHijri(date)
   const monthName = HIJRI_MONTH_NAMES[month - 1]
   const base = `${day} ${monthName} ${year} H`
-  if (!withDayName) return base
+  if (!withDayName)
+    return base
   const dayName = (() => {
     try {
       return date.toLocaleDateString('id-ID', { weekday: 'long' })
-    } catch (e) {
+    }
+    catch {
       return date.toLocaleDateString(undefined, { weekday: 'long' })
     }
   })()

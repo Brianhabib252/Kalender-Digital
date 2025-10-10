@@ -1,3 +1,10 @@
+<script setup>
+const props = defineProps({
+  visible: { type: Boolean, default: false },
+  message: { type: String, default: 'Berhasil disimpan' },
+})
+</script>
+
 <template>
   <transition name="fade-pop">
     <div
@@ -11,23 +18,20 @@
             <path class="success-check__check" fill="none" d="M16 26 l8 8 12-16" />
           </svg>
         </div>
-        <p class="text-lg font-semibold text-emerald-700">{{ message }}</p>
+        <p class="text-lg font-semibold text-emerald-700">
+          {{ message }}
+        </p>
       </div>
     </div>
   </transition>
 </template>
 
-<script setup>
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  message: { type: String, default: 'Berhasil disimpan' },
-})
-</script>
-
 <style scoped>
 .fade-pop-enter-active,
 .fade-pop-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
 }
 .fade-pop-enter-from,
 .fade-pop-leave-to {
@@ -60,10 +64,14 @@ const props = defineProps({
 }
 
 @keyframes circle {
-  to { stroke-dashoffset: 0; }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 @keyframes check {
-  to { stroke-dashoffset: 0; }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 </style>

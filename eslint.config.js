@@ -8,5 +8,15 @@ export default antfu({
     html: true,
     markdown: 'prettier',
   },
-  ignores: ['storage/**/*', '**/*.{yaml,yml,php}', 'resources/js/components/ui/**/*', 'public/**/*'],
+  rules: {
+    'vue/custom-event-name-casing': ['error', 'kebab-case'],
+    'style/max-statements-per-line': 'off',
+  },
+  ignores: [
+    'storage/**/*',
+    '**/*.{yaml,yml,php}',
+    'resources/js/Components/ui/**/*',
+    'public/**/*',
+    'temp_original.vue',
+  ],
 })

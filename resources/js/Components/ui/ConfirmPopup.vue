@@ -1,3 +1,14 @@
+<script setup>
+const props = defineProps({
+  visible: { type: Boolean, default: false },
+  title: { type: String, default: 'Konfirmasi' },
+  message: { type: String, default: '' },
+  confirmText: { type: String, default: 'Hapus' },
+  cancelText: { type: String, default: 'Batal' },
+  loading: { type: Boolean, default: false },
+})
+</script>
+
 <template>
   <transition name="fade-pop">
     <div
@@ -13,8 +24,12 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 12A9 9 0 1 1 3 12a9 9 0 0 1 18 0Z" />
           </svg>
         </div>
-        <h3 class="mt-4 text-xl font-semibold text-gray-800">{{ title }}</h3>
-        <p v-if="message" class="mt-2 text-sm text-gray-600 whitespace-pre-line">{{ message }}</p>
+        <h3 class="mt-4 text-xl font-semibold text-gray-800">
+          {{ title }}
+        </h3>
+        <p v-if="message" class="mt-2 text-sm text-gray-600 whitespace-pre-line">
+          {{ message }}
+        </p>
         <div class="mt-8 flex items-center justify-center gap-3">
           <button
             type="button"
@@ -30,7 +45,7 @@
             :disabled="loading"
             @click="$emit('confirm')"
           >
-            <span v-if="loading" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent"></span>
+            <span v-if="loading" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
             <span>{{ confirmText }}</span>
           </button>
         </div>
@@ -39,21 +54,12 @@
   </transition>
 </template>
 
-<script setup>
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  title: { type: String, default: 'Konfirmasi' },
-  message: { type: String, default: '' },
-  confirmText: { type: String, default: 'Hapus' },
-  cancelText: { type: String, default: 'Batal' },
-  loading: { type: Boolean, default: false },
-})
-</script>
-
 <style scoped>
 .fade-pop-enter-active,
 .fade-pop-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
 }
 .fade-pop-enter-from,
 .fade-pop-leave-to {
