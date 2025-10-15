@@ -1,6 +1,6 @@
 <script setup>
 import { router, usePage } from '@inertiajs/vue3'
-import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import DayView from '../../Components/Calendar/DayView.vue'
 import EventFormModal from '../../Components/Calendar/EventFormModal.vue'
 import MonthView from '../../Components/Calendar/MonthView.vue'
@@ -10,6 +10,7 @@ import ConfirmPopup from '../../Components/ui/ConfirmPopup.vue'
 import ErrorPopup from '../../Components/ui/ErrorPopup.vue'
 import LoadingOverlay from '../../Components/ui/LoadingOverlay.vue'
 import SuccessPopup from '../../Components/ui/SuccessPopup.vue'
+import AnimatedBubbleBackground from '@/components/Decor/AnimatedBubbleBackground.vue'
 import { formatHijriDate, formatHijriMonth, gregorianToHijri, hijriMonthLength, hijriMonthRange, hijriToGregorianDate, shiftHijriMonth } from '../../lib/hijri.js'
 
 const props = defineProps({
@@ -70,6 +71,24 @@ const deleteConfirmMessage = ref('')
 const pendingDeleteEvent = ref(null)
 const deleteLoading = ref(false)
 
+const showNotificationModal = ref(false)
+const notificationsSupported = typeof window !== 'undefined' && typeof Notification !== 'undefined'
+const notificationPermission = ref(notificationsSupported ? Notification.permission : 'denied')
+const notificationStorageKey = 'calendar.notification.topics'
+const notificationLeadMs = 15 * 60 * 1000
+const notificationTopics = [
+  { id: 'kesekretariatan', label: 'Kesekretariatan', targets: ['kesekretariatan', 'seluruh pegawai'] },
+  { id: 'kepaniteraan', label: 'Kepaniteraan', targets: ['kepaniteraan', 'seluruh pegawai'] },
+  { id: 'hakim', label: 'Hakim', targets: ['hakim', 'seluruh pegawai'] },
+]
+const notificationTargetMap = notificationTopics.reduce((map, topic) => {
+  map[topic.id] = topic.targets
+  return map
+}, {})
+const selectedNotificationTopics = ref([])
+const notificationTimers = new Map()
+let notificationInitialized = false
+
 const calendarSystem = ref('gregorian')
 const isHijri = computed(() => calendarSystem.value === 'hijri')
 
@@ -91,6 +110,7 @@ if (initialCalendar === 'hijri') {
 onBeforeUnmount(() => {
   clearTimeout(successTimer)
   clearTimeout(errorTimer)
+  clearScheduledNotifications()
 })
 
 function startOfWeek(date) {
@@ -232,6 +252,16 @@ const selectedDayLabel = computed(() => {
   return formatGregorianLong(base)
 })
 
+const hasActiveNotifications = computed(() => selectedNotificationTopics.value.length > 0)
+const notificationSummary = computed(() => {
+  if (!selectedNotificationTopics.value.length)
+    return 'Tidak aktif'
+  const labels = notificationTopics
+    .filter(topic => selectedNotificationTopics.value.includes(topic.id))
+    .map(topic => topic.label)
+  return labels.join(', ')
+})
+
 function openProfileModal() {
   showProfileModal.value = true
 }
@@ -294,6 +324,41 @@ async function fetchHolidays() {
 }
 onMounted(() => {
   fetchHolidays()
+
+  if (notificationsSupported) {
+    notificationPermission.value = Notification.permission
+
+    try {
+      const stored = window.localStorage.getItem(notificationStorageKey)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) {
+          const restored = parsed.filter(id => notificationTargetMap[id])
+          selectedNotificationTopics.value = restored
+        }
+      }
+    }
+    catch (error) {
+      console.warn('Gagal memuat preferensi notifikasi', error)
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration('/notification-sw.js')
+        .then((existing) => {
+          if (!existing) {
+            navigator.serviceWorker.register('/notification-sw.js').catch(() => {})
+          }
+        })
+        .catch(() => {
+          navigator.serviceWorker.register('/notification-sw.js').catch(() => {})
+        })
+    }
+  }
+
+  setTimeout(() => {
+    notificationInitialized = true
+    rescheduleEventNotifications()
+  }, 0)
 })
 
 watchEffect(() => {
@@ -313,6 +378,237 @@ watchEffect(() => {
     calendar: systemValue,
   }, replace: true, preserveState: true, preserveScroll: true })
 })
+
+watch(events, () => {
+  if (!notificationInitialized)
+    return
+  rescheduleEventNotifications()
+}, { deep: true })
+
+watch(selectedNotificationTopics, async (newValue, oldValue) => {
+  if (!notificationInitialized)
+    return
+
+  if (!notificationsSupported) {
+    if (newValue.length) {
+      triggerError('Browser Anda tidak mendukung notifikasi.')
+      selectedNotificationTopics.value = []
+    }
+    return
+  }
+
+  const previouslyActive = Array.isArray(oldValue) && oldValue.length > 0
+  const nowActive = newValue.length > 0
+
+  if (nowActive && !previouslyActive) {
+    const granted = await ensureNotificationPermission()
+    if (!granted) {
+      selectedNotificationTopics.value = []
+      return
+    }
+    triggerSuccess('Notifikasi kalender aktif')
+  }
+  else if (!nowActive && previouslyActive) {
+    triggerSuccess('Notifikasi kalender dinonaktifkan')
+  }
+
+  updateStoredNotificationTopics(newValue)
+  rescheduleEventNotifications()
+}, { deep: true })
+
+function closeNotificationModal() {
+  showNotificationModal.value = false
+}
+
+function updateStoredNotificationTopics(topics) {
+  if (typeof window === 'undefined')
+    return
+  try {
+    window.localStorage.setItem(notificationStorageKey, JSON.stringify(topics))
+  }
+  catch (error) {
+    console.warn('Gagal menyimpan preferensi notifikasi', error)
+  }
+}
+
+function clearScheduledNotifications() {
+  for (const timeout of notificationTimers.values())
+    clearTimeout(timeout)
+  notificationTimers.clear()
+}
+
+function normalizeDivisionName(name) {
+  if (typeof name === 'string')
+    return name.trim().toLowerCase()
+  if (name == null)
+    return ''
+  return String(name).trim().toLowerCase()
+}
+
+function parseEventDateTime(str) {
+  if (!str)
+    return null
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/)
+  if (match) {
+    const [, year, month, day, hour, minute, second] = match
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second || '0'),
+    )
+  }
+  const dt = new Date(str)
+  return Number.isNaN(dt.getTime()) ? null : dt
+}
+
+function eventMatchesSelectedTopics(event) {
+  if (!selectedNotificationTopics.value.length)
+    return false
+  const divisions = Array.isArray(event?.divisions) ? event.divisions : []
+  if (!divisions.length)
+    return false
+  const normalized = new Set(
+    divisions
+      .map(div => normalizeDivisionName(div?.name))
+      .filter(Boolean),
+  )
+  if (!normalized.size)
+    return false
+  return selectedNotificationTopics.value.some((topicId) => {
+    const targets = notificationTargetMap[topicId] || []
+    return targets.some(target => normalized.has(target))
+  })
+}
+
+function formatTimeForNotification(dateString) {
+  const dt = parseEventDateTime(dateString)
+  if (!dt)
+    return ''
+  try {
+    return dt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+  }
+  catch {
+    return dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  }
+}
+
+async function ensureNotificationPermission() {
+  if (!notificationsSupported)
+    return false
+  if (notificationPermission.value === 'granted')
+    return true
+  if (notificationPermission.value === 'denied') {
+    triggerError('Izin notifikasi diblokir di pengaturan browser Anda.')
+    return false
+  }
+  try {
+    const result = await Notification.requestPermission()
+    notificationPermission.value = result
+    if (result === 'granted')
+      return true
+    triggerError('Izin notifikasi diperlukan agar pengingat dapat dikirim.')
+    return false
+  }
+  catch (error) {
+    console.error('Gagal meminta izin notifikasi', error)
+    triggerError('Gagal meminta izin notifikasi.')
+    return false
+  }
+}
+
+async function showEventNotification(event) {
+  if (!notificationsSupported || notificationPermission.value !== 'granted')
+    return
+
+  const title = event?.title || 'Pengingat Kegiatan'
+  const timeText = formatTimeForNotification(event?.start_at)
+  const locationText = (event?.location && event.location.trim()) ? event.location.trim() : 'Lokasi belum ditentukan'
+  const bodyLines = []
+  if (timeText)
+    bodyLines.push(`Waktu: ${timeText}`)
+  bodyLines.push(`Lokasi: ${locationText}`)
+
+  const options = {
+    body: bodyLines.join('\n'),
+    tag: `event-${event?.id ?? 'unknown'}-${event?.start_at ?? ''}`,
+    data: {
+      eventId: event?.id ?? null,
+      startAt: event?.start_at ?? null,
+    },
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
+  }
+
+  try {
+    let registration = null
+    if ('serviceWorker' in navigator) {
+      try {
+        registration = await navigator.serviceWorker.getRegistration('/notification-sw.js')
+        if (!registration)
+          registration = await navigator.serviceWorker.getRegistration()
+      }
+      catch {
+        registration = null
+      }
+    }
+    if (registration?.showNotification) {
+      registration.showNotification(title, options)
+    }
+    else {
+      // Fallback to direct notification if there is no service worker
+      // eslint-disable-next-line no-new
+      new Notification(title, options)
+    }
+  }
+  catch (error) {
+    console.error('Gagal menampilkan notifikasi kegiatan', error)
+  }
+}
+
+function rescheduleEventNotifications() {
+  clearScheduledNotifications()
+
+  if (!notificationsSupported)
+    return
+  if (notificationPermission.value !== 'granted')
+    return
+  if (!selectedNotificationTopics.value.length)
+    return
+  if (!Array.isArray(events.value) || !events.value.length)
+    return
+
+  const now = Date.now()
+
+  for (const event of events.value) {
+    if (!event || !event.start_at)
+      continue
+    if (!eventMatchesSelectedTopics(event))
+      continue
+    const start = parseEventDateTime(event.start_at)
+    if (!start)
+      continue
+    const startMs = start.getTime()
+    if (Number.isNaN(startMs))
+      continue
+    if (startMs <= now)
+      continue
+
+    const triggerAt = startMs - notificationLeadMs
+    let delay = triggerAt - now
+    if (delay < 0)
+      delay = 0
+
+    const key = `${event.id ?? 'event'}_${event.start_at}`
+    const timerId = setTimeout(() => {
+      void showEventNotification(event)
+      notificationTimers.delete(key)
+    }, delay)
+    notificationTimers.set(key, timerId)
+  }
+}
 
 function go(delta, unit) {
   const d = parseYMD(currentDate.value)
@@ -504,8 +800,9 @@ async function performDelete(evt, attempt = 0) {
 </script>
 
 <template>
-  <section class="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50 px-3 py-8 sm:px-5 md:px-8 md:py-10">
-    <div class="mx-auto w-full max-w-6xl space-y-6 lg:space-y-8">
+  <section class="relative isolate min-h-screen overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-sky-50 px-3 py-8 sm:px-5 md:px-8 md:py-10">
+    <AnimatedBubbleBackground />
+    <div class="relative z-10 mx-auto w-full max-w-6xl space-y-6 lg:space-y-8">
       <!-- Dashboard header -->
       <div class="rounded-3xl border border-emerald-300 bg-gradient-to-r from-emerald-300 via-emerald-200 to-emerald-100 px-5 py-7 shadow-[0_28px_100px_-45px_rgba(6,95,70,0.6)] transition-all duration-300 hover:shadow-[0_45px_160px_-55px_rgba(6,95,70,0.7)] sm:px-6 md:px-8">
         <div class="space-y-6 text-emerald-900">
@@ -529,12 +826,12 @@ async function performDelete(evt, attempt = 0) {
               </div>
             </div>
 
-            <div class="flex w-full flex-col gap-3 lg:max-w-sm xl:max-w-xs lg:items-end">
-              <div v-if="user" class="flex w-full flex-col items-center gap-2 rounded-2xl border border-emerald-200 bg-white/90 px-3 py-3 text-center shadow-[0_12px_48px_-40px_rgba(16,185,129,0.6)] backdrop-blur-sm">
-                <div class="text-sm font-semibold text-emerald-700 sm:text-base">
-                  {{ user.name }}
-                </div>
-                <button
+              <div class="flex w-full flex-col gap-3 lg:max-w-sm xl:max-w-xs lg:items-end">
+                <div v-if="user" class="flex w-full flex-col items-center gap-2 rounded-2xl border border-emerald-200 bg-white/90 px-3 py-3 text-center shadow-[0_12px_48px_-40px_rgba(16,185,129,0.6)] backdrop-blur-sm">
+                  <div class="text-sm font-semibold text-emerald-700 sm:text-base">
+                    {{ user.name }}
+                  </div>
+                  <button
                   type="button"
                   class="inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-emerald-300/30 transition hover:from-emerald-300 hover:via-emerald-400 hover:to-teal-300 sm:text-sm"
                   @click="openProfileModal"
@@ -546,10 +843,35 @@ async function performDelete(evt, attempt = 0) {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="h-4 w-4 text-emerald-500"><circle cx="11" cy="11" r="7" /><path stroke-linecap="round" stroke-linejoin="round" d="m16.5 16.5 3 3" /></svg>
                 <input v-model="q" placeholder="Cari judul/lokasi/deskripsi" class="h-full w-full bg-transparent text-sm text-emerald-700 placeholder:text-emerald-400 focus:outline-none">
               </div>
+              <button
+                class="flex h-12 w-full items-center justify-center rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 text-sm font-semibold text-white shadow-lg shadow-emerald-300/40 transition hover:from-emerald-300 hover:via-emerald-400 hover:to-teal-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 sm:h-14"
+                :disabled="!canCreate"
+                @click="openCreate()"
+              >
+                Tambah Kegiatan
+              </button>
             </div>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <button
+              type="button"
+              class="flex h-12 w-full items-center justify-between rounded-xl border border-emerald-200 bg-white px-4 text-left text-sm font-semibold text-emerald-600 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 active:scale-95 sm:h-14"
+              @click="showNotificationModal = true"
+            >
+              <span class="flex items-center gap-3">
+                <span class="grid h-9 w-9 place-items-center rounded-full bg-emerald-100 text-emerald-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M12 2a5 5 0 0 0-5 5v2.05c0 .314-.093.621-.266.882L5.17 12.938A2 2 0 0 0 6.794 16h10.412a2 2 0 0 0 1.624-3.062l-1.564-3.006A1.75 1.75 0 0 1 16 9.05V7a5 5 0 0 0-5-5zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22z" /></svg>
+                </span>
+                <span class="flex flex-col items-start">
+                  <span>Notifikasi</span>
+                  <span class="text-xs font-medium" :class="hasActiveNotifications ? 'text-emerald-500' : 'text-emerald-400'">
+                    {{ hasActiveNotifications ? notificationSummary : 'Tidak aktif' }}
+                  </span>
+                </span>
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="h-4 w-4 text-emerald-400"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m8.25 9 3.75 3.75L15.75 9" /></svg>
+            </button>
             <button class="flex h-12 w-full items-center justify-center rounded-xl border border-emerald-200 bg-white text-sm font-semibold text-emerald-600 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 active:scale-95 sm:h-14" @click="currentDate = today">
               Hari Ini
             </button>
@@ -557,13 +879,6 @@ async function performDelete(evt, attempt = 0) {
               <span class="hidden sm:inline whitespace-nowrap text-emerald-500/80">Pilih tanggal</span>
               <input v-model="currentDate" type="date" class="h-9 w-full rounded-md border border-transparent bg-transparent text-right focus:border-emerald-300 focus:outline-none">
             </label>
-            <button
-              class="flex h-12 w-full items-center justify-center rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 text-sm font-semibold text-white shadow-lg shadow-emerald-300/40 transition hover:from-emerald-300 hover:via-emerald-400 hover:to-teal-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 sm:h-14"
-              :disabled="!canCreate"
-              @click="openCreate()"
-            >
-              Tambah Kegiatan
-            </button>
             <div class="flex w-full flex-col gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-emerald-700 shadow-sm sm:h-14 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:py-0">
               <div class="flex w-full flex-col gap-2 sm:flex-1 sm:h-full sm:flex-row sm:items-center">
                 <button
@@ -719,6 +1034,72 @@ async function performDelete(evt, attempt = 0) {
         :user="user"
         @close="closeProfileModal"
       />
+
+      <div
+        v-if="showNotificationModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-emerald-900/30 px-4 py-8 backdrop-blur-sm"
+        @click.self="closeNotificationModal"
+      >
+        <div class="relative w-full max-w-md rounded-3xl border border-emerald-200 bg-white p-6 shadow-2xl">
+          <button
+            type="button"
+            class="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200 text-emerald-500 transition hover:bg-emerald-50"
+            aria-label="Tutup pengaturan notifikasi"
+            @click="closeNotificationModal"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="h-4 w-4"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6m0 12L6 6" /></svg>
+          </button>
+          <div class="mb-4 flex items-center gap-3">
+            <span class="grid h-10 w-10 place-items-center rounded-full bg-emerald-100 text-emerald-600">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M12 2a5 5 0 0 0-5 5v2.05c0 .314-.093.621-.266.882L5.17 12.938A2 2 0 0 0 6.794 16h10.412a2 2 0 0 0 1.624-3.062l-1.564-3.006A1.75 1.75 0 0 1 16 9.05V7a5 5 0 0 0-5-5zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22z" /></svg>
+            </span>
+            <div>
+              <h2 class="text-lg font-semibold text-emerald-700">Pengingat kegiatan</h2>
+              <p class="text-sm text-emerald-500">
+                Notifikasi akan dikirim 15 menit sebelum kegiatan dimulai untuk topik yang Anda pilih.
+              </p>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <label
+              v-for="topic in notificationTopics"
+              :key="topic.id"
+              class="flex items-start gap-3 rounded-xl border border-transparent px-3 py-2 transition hover:border-emerald-200 hover:bg-emerald-50"
+            >
+              <input
+                v-model="selectedNotificationTopics"
+                :value="topic.id"
+                type="checkbox"
+                class="mt-1 h-4 w-4 rounded border-emerald-300 text-emerald-500 focus:ring-emerald-400"
+                :disabled="!notificationsSupported"
+              >
+              <div class="flex flex-col">
+                <span class="text-sm font-semibold text-emerald-700">
+                  {{ topic.label }}
+                </span>
+                <span class="text-xs text-emerald-500">
+                  Termasuk kegiatan {{ topic.label.toLowerCase() }} dan seluruh pegawai.
+                </span>
+              </div>
+            </label>
+          </div>
+          <p class="mt-4 text-xs leading-relaxed text-emerald-400">
+            Pastikan browser diizinkan mengirim notifikasi dan tetap aktif di perangkat Anda.
+          </p>
+          <div
+            v-if="!notificationsSupported"
+            class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700"
+          >
+            Browser Anda tidak mendukung notifikasi.
+          </div>
+          <div
+            v-else-if="notificationPermission === 'denied'"
+            class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600"
+          >
+            Notifikasi diblokir. Aktifkan izin notifikasi di pengaturan browser lalu coba lagi.
+          </div>
+        </div>
+      </div>
 
       <SuccessPopup :visible="showSuccess" :message="successMessage" />
       <ErrorPopup :visible="showError" :message="errorMessage" />

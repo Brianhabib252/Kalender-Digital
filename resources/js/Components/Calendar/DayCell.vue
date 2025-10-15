@@ -1,5 +1,5 @@
 <script setup>
-defineProps({
+const props = defineProps({
   date: { type: Date, required: true },
   muted: { type: Boolean, default: false },
   isToday: { type: Boolean, default: false },

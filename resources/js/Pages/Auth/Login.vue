@@ -3,6 +3,7 @@ import { Link, useForm } from '@inertiajs/vue3'
 import { computed, inject } from 'vue'
 import InputError from '@/components/InputError.vue'
 import AuthenticationCardLogo from '@/components/LogoRedirect.vue'
+import AnimatedBubbleBackground from '@/components/Decor/AnimatedBubbleBackground.vue'
 import Button from '@/components/ui/button/Button.vue'
 import Checkbox from '@/components/ui/checkbox/Checkbox.vue'
 import Input from '@/components/ui/input/Input.vue'
@@ -42,8 +43,9 @@ useSeoMetaTags({
 </script>
 
 <template>
-  <main class="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50">
-    <div class="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-4 py-16">
+  <main class="relative isolate min-h-screen overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-sky-50">
+    <AnimatedBubbleBackground />
+    <div class="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-4 py-16">
       <div class="grid gap-10 rounded-3xl border border-emerald-100 bg-white/80 p-8 shadow-[0_45px_120px_-60px_rgba(16,185,129,0.55)] md:grid-cols-[1.05fr,0.95fr] md:p-14">
         <section class="flex flex-col items-center justify-center text-center text-emerald-900">
           <div class="max-w-lg space-y-6">
